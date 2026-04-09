@@ -1,0 +1,25 @@
+{
+  "name": "@snelusha/balrun",
+  "type": "module",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsdown"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "tsdown": "^0.21.7"
+  },
+  "peerDependencies": {
+    "typescript": "^6.0.2"
+  }
+}
