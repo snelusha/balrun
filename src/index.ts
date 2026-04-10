@@ -1,34 +1,29 @@
-import "./wasm_exec";
-
-import { readFileSync } from "fs";
-import { join } from "path";
+import type { FS } from "./fs";
 import { NodeFS } from "./node-fs";
+import { getGlobalRun, loadWasm } from "./wasm-runtime";
 
-let _ready: Promise<void> | null = null;
+export type { FS } from "./fs";
+export { NodeFS } from "./node-fs";
 
-async function initializeWasm(): Promise<void> {
-    const go = new globalThis.Go();
-    const wasmPath = join(__dirname, "ballerina.wasm");
-    const wasmBuffer = readFileSync(wasmPath);
-    const { instance } = await WebAssembly.instantiate(
-        wasmBuffer,
-        go.importObject,
-    );
-    go.run(instance);
-    await new Promise<void>((resolve) => setImmediate(resolve));
+export interface BallerinaOptions {
+    fs?: FS;
 }
 
-function loadWasm(): Promise<void> {
-    _ready ??= initializeWasm().catch((err) => {
-        _ready = null;
-        throw err;
-    });
+export class Ballerina {
+    private readonly fs: FS;
 
-    return _ready;
-}
+    constructor(options?: BallerinaOptions) {
+        this.fs = options?.fs ?? new NodeFS();
+    }
 
-export async function run(path: string) {
-    await loadWasm();
-    const fs = new NodeFS();
-    return globalThis.run(fs, path);
+    async run(path: string): Promise<unknown> {
+        if (typeof path !== "string" || path.length === 0) {
+            throw new TypeError(
+                "path must be a non-empty string",
+            );
+        }
+
+        await loadWasm();
+        return getGlobalRun()(this.fs, path);
+    }
 }
