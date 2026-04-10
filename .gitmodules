@@ -1,0 +1,3 @@
+[submodule "packages/ballerina-wasm/ballerina-lang-go"]
+	path = packages/ballerina-wasm/ballerina-lang-go
+	url = https://github.com/ballerina-platform/ballerina-lang-go
