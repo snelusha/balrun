@@ -1,0 +1,86 @@
+name: Release & Publish to npm
+ 
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+ 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26"
+          cache: true
+          cache-dependency-path: |
+            packages/ballerina-wasm/go.mod
+            packages/ballerina-wasm/go.sum
+ 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+ 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+ 
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+ 
+      - name: Build
+        run: bun run build --filter=@snelusha/balrun
+
+      - name: Determine npm tag
+        id: npm_tag
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.tag || github.ref_name }}"
+          if [[ "$VERSION" =~ -(next|canary|beta|rc)([.\-]|$) ]]; then
+            NPM_TAG="${BASH_REMATCH[1]}"
+          else
+            git fetch origin main --depth=1
+            if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              NPM_TAG="latest"
+            else
+              echo "::error::Releases with the 'latest' npm tag must be on the main branch."
+              exit 1
+            fi
+          fi
+          echo "npm_tag=$NPM_TAG" >> $GITHUB_OUTPUT
+          echo "Using npm tag: $NPM_TAG"
+
+      - name: Pack
+        working-directory: packages/balrun
+        run: bun pm pack
+
+      - name: Publish to npm
+        working-directory: packages/balrun
+        run: npm publish --access public --provenance --tag ${{ steps.npm_tag.outputs.npm_tag }} *.tgz
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+ 
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true
