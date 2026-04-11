@@ -8,6 +8,14 @@ Run Ballerina anywhere.
 npm install @snelusha/balrun
 ```
 
+## CLI
+
+```bash
+npx @snelusha/balrun ./main.bal
+```
+
+Give a `.bal` file, a package directory, or `.` for the current package.
+
 ## Usage
 
 ```ts
