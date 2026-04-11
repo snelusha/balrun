@@ -1,6 +1,21 @@
 {
 	"name": "@snelusha/balrun",
 	"version": "0.1.0",
+	"description": "Run Ballerina anywhere!",
+	"license": "MIT",
+	"author": {
+		"name": "Sithija Nelusha Silva",
+		"email": "hello@snelusha.dev",
+		"url": "https://snelusha.dev"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/snelusha/balrun.git",
+		"directory": "packages/balrun"
+	},
+	"bugs": {
+		"url": "https://github.com/snelusha/balrun/issues"
+	},
 	"type": "module",
 	"main": "./dist/index.mjs",
 	"module": "./dist/index.mjs",
