@@ -13,8 +13,12 @@
 		}
 	},
 	"files": [
+		"bin",
 		"dist"
 	],
+	"bin": {
+		"balrun": "./bin/cli.mjs"
+	},
 	"scripts": {
 		"build": "tsdown && cp ../ballerina-wasm/dist/ballerina.wasm dist/ballerina.wasm",
 		"clean": "git clean -xdf .turbo dist"
