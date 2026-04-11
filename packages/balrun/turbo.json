@@ -1,0 +1,16 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"build": {
+			"dependsOn": ["^build", "ballerina-wasm#build"],
+			"inputs": [
+				"src/**",
+				"tsdown.config.ts",
+				"package.json",
+				"../ballerina-wasm/dist/ballerina.wasm"
+			],
+			"outputs": ["dist/**"]
+		}
+	}
+}

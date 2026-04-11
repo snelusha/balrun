@@ -1,25 +1,24 @@
 {
-  "name": "@snelusha/balrun",
-  "type": "module",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsdown"
-  },
-  "files": [
-    "dist"
-  ],
-  "exports": {
-    ".": {
-      "import": "./dist/index.mjs",
-      "types": "./dist/index.d.mts"
-    }
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "tsdown": "^0.21.7"
-  },
-  "peerDependencies": {
-    "typescript": "^6.0.2"
-  }
+	"name": "root",
+	"private": true,
+	"workspaces": {
+		"packages": [
+			"apps/*",
+			"packages/*"
+		]
+	},
+	"packageManager": "bun@1.3.12",
+	"scripts": {
+		"build": "turbo run build",
+		"build:balrun": "turbo run build --filter=@snelusha/balrun",
+		"format": "biome format . --write",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --fix",
+		"clean": "git clean -xdf node_modules",
+		"clean:workspace": "turbo run clean"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.11",
+		"turbo": "^2.9.6"
+	}
 }

@@ -1,0 +1,15 @@
+{
+	"extends": ["//"],
+	"tasks": {
+		"build": {
+			"env": ["LocalAppData"],
+			"inputs": [
+				"**/*.go",
+				"go.mod",
+				"go.sum",
+				"../../.git/modules/packages/ballerina-wasm/ballerina-lang-go/HEAD"
+			],
+			"outputs": ["dist/**"]
+		}
+	}
+}

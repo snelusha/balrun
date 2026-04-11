@@ -1,0 +1,13 @@
+{
+	"root": false,
+	"extends": "//",
+	"files": {
+		"includes": [
+			"**",
+			"!**/*.go",
+			"!**/*.mod",
+			"!**/*.sum",
+			"!!ballerina-lang-go"
+		]
+	}
+}
