@@ -25,28 +25,23 @@ const ballerina = new Ballerina();
 const result = await ballerina.run("./main.bal");
 ```
 
-By default, `Ballerina` uses `NodeFS` to read files from disk. You can swap this out with any custom filesystem by implementing the `FS` interface and passing it in.
-
 ### Custom `FS`
+
+By default, `Ballerina` uses `NodeFS` to read files from disk. You can swap this out with any custom filesystem by implementing the `FS` interface and passing it in.
 
 ```ts
 import { Ballerina, type FS } from "@snelusha/balrun";
 
 class MemFS implements FS {
-  private data = new Map<string, string>([
-    ["main.bal", `import ballerina/io;\npublic function main() { io:println("hello"); }`],
-  ]);
-
-  open(path: string) {
-    const text = this.data.get(path);
-    return text == null ? null : { content: text, size: text.length, modTime: 0, isDir: false };
-  }
-
-  // implement remaining FS methods
+	// When running a single file, only `open` and `stat` are required.
+	// When running a package, `readDir` is also required.
 }
 
-const result = await new Ballerina({ fs: new MemFS() }).run("main.bal");
+const fs = new MemFS({ "main.bal": `...` });
+await new Ballerina({ fs }).run("main.bal");
 ```
+
+See [`examples/mem-fs`](https://github.com/snelusha/balrun/tree/main/packages/balrun/examples/mem-fs) for a full `MemFS` implementation.
 
 ## Acknowledgements
 
