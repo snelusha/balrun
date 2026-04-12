@@ -25,6 +25,16 @@ const ballerina = new Ballerina();
 const result = await ballerina.run("./main.bal");
 ```
 
+### `colors`
+
+By default, diagnostics are printed with ANSI colors. Pass `colors: false` to disable them.
+
+```ts
+await new Ballerina({ colors: false }).run("./main.bal");
+```
+
+The `balrun` CLI sets `colors: Boolean(process.stderr.isTTY)`, so colors are on in interactive terminals and off when stderr is piped.
+
 ### Custom `FS`
 
 By default, `Ballerina` uses `NodeFS` to read files from disk. You can swap this out with any custom filesystem by implementing the `FS` interface and passing it in.
