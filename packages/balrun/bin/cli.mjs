@@ -11,7 +11,9 @@ if (!path) {
 	process.exit(1);
 }
 
-const result = await new Ballerina().run(path);
+const result = await new Ballerina({
+	colors: Boolean(process.stderr.isTTY),
+}).run(path);
 
 if (result) {
 	process.stderr.write(`error: ${result.error}\n`);

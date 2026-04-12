@@ -30,6 +30,11 @@ func run(this js.Value, args []js.Value) any {
 	proxy := args[0]
 	path := args[1].String()
 
+	noColors := false
+	if len(args) >= 3 && !args[2].IsUndefined() {
+		noColors = !args[2].Bool()
+	}
+
 	fsys := NewBridgeFS(proxy)
 
 	result, err := directory.LoadProject(fsys, path)
@@ -39,7 +44,7 @@ func run(this js.Value, args []js.Value) any {
 
 	diags := result.Diagnostics()
 	if diags.HasErrors() {
-		printDiagnostics(fsys, path, os.Stderr, diags)
+		printDiagnostics(fsys, path, os.Stderr, diags, noColors)
 		return nil
 	}
 
@@ -49,7 +54,7 @@ func run(this js.Value, args []js.Value) any {
 	compilation := pkg.Compilation()
 	diags = compilation.DiagnosticResult()
 	if diags.HasErrors() {
-		printDiagnostics(fsys, path, os.Stderr, diags)
+		printDiagnostics(fsys, path, os.Stderr, diags, noColors)
 		return nil
 	}
 

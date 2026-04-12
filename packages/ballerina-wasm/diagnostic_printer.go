@@ -10,6 +10,43 @@ import (
 	"strings"
 )
 
+type termStyle struct {
+	red    func(string) string
+	yellow func(string) string
+	cyan   func(string) string
+	bold   func(string) string
+}
+
+func (s termStyle) severityColor(severity diagnostics.DiagnosticSeverity) func(string) string {
+	if severity == diagnostics.Warning {
+		return s.yellow
+	}
+	return s.red
+}
+
+func termStyleFor(noColors bool) termStyle {
+	if noColors {
+		identity := func(s string) string { return s }
+		return termStyle{
+			red:    identity,
+			yellow: identity,
+			cyan:   identity,
+			bold:   identity,
+		}
+	}
+	colorFn := func(code string) func(string) string {
+		return func(s string) string {
+			return "\033[" + code + "m" + s + "\033[0m"
+		}
+	}
+	return termStyle{
+		red:    colorFn("31"),
+		yellow: colorFn("33"),
+		cyan:   colorFn("36"),
+		bold:   colorFn("1"),
+	}
+}
+
 type diagnosticLocation struct {
 	filePath            string
 	startLine, startCol int
@@ -34,14 +71,15 @@ func buildDiagnosticLocation(filePath string, startLine, startCol, endLine, endC
 	}
 }
 
-func printDiagnostics(fsys fs.FS, path string, w io.Writer, diagResult projects.DiagnosticResult) {
+func printDiagnostics(fsys fs.FS, path string, w io.Writer, diagResult projects.DiagnosticResult, noColors bool) {
 	for _, d := range diagResult.Diagnostics() {
-		printDiagnostic(fsys, path, w, d)
+		printDiagnostic(fsys, path, w, d, noColors)
 	}
 }
 
-func printDiagnostic(fsys fs.FS, path string, w io.Writer, d diagnostics.Diagnostic) {
-	printDiagnosticHeader(w, d)
+func printDiagnostic(fsys fs.FS, path string, w io.Writer, d diagnostics.Diagnostic, noColors bool) {
+	s := termStyleFor(noColors)
+	printDiagnosticHeader(w, s, d)
 
 	location := d.Location()
 	if location == nil {
@@ -55,28 +93,27 @@ func printDiagnostic(fsys fs.FS, path string, w io.Writer, d diagnostics.Diagnos
 		lineRange.StartLine().Line(), lineRange.StartLine().Offset(),
 		lineRange.EndLine().Line(), lineRange.EndLine().Offset(),
 	)
-	printDiagnosticLocation(w, loc)
-	printSourceSnippet(w, loc, fsys, path)
+	printDiagnosticLocation(w, s, loc)
+	printSourceSnippet(w, s, loc, fsys, s.severityColor(d.DiagnosticInfo().Severity()), path)
 	fmt.Fprintln(w)
 }
 
-func printDiagnosticHeader(w io.Writer, d diagnostics.Diagnostic) {
+func printDiagnosticHeader(w io.Writer, s termStyle, d diagnostics.Diagnostic) {
 	info := d.DiagnosticInfo()
 	codeStr := ""
 	if c := info.Code(); c != "" {
 		codeStr = fmt.Sprintf("[%s]", c)
 	}
-	fmt.Fprintf(w, "%s%s: %s\n",
-		strings.ToLower(info.Severity().String()), codeStr, d.Message(),
-	)
+	severityStr := s.bold(s.severityColor(info.Severity())(strings.ToLower(info.Severity().String()) + codeStr))
+	fmt.Fprintf(w, "%s: %s\n", severityStr, s.bold(d.Message()))
 }
 
-func printDiagnosticLocation(w io.Writer, loc diagnosticLocation) {
-	fmt.Fprintf(w, "%*s--> %s:%d:%d\n",
-		loc.numWidth, "", loc.filePath, loc.startLine+1, loc.startCol+1,
+func printDiagnosticLocation(w io.Writer, s termStyle, loc diagnosticLocation) {
+	fmt.Fprintf(w, "%*s%s %s:%d:%d\n",
+		loc.numWidth, "", s.cyan("-->"), loc.filePath, loc.startLine+1, loc.startCol+1,
 	)
 	if loc.filePath != "" {
-		fmt.Fprintf(w, "%*s |\n", loc.numWidth, "")
+		fmt.Fprintf(w, "%*s %s\n", loc.numWidth, "", s.cyan("|"))
 	}
 }
 
@@ -91,10 +128,10 @@ func snippetSourcePath(fsys fs.FS, projectOrFilePath, diagFile string) string {
 	return path.Join(projectOrFilePath, diagFile)
 }
 
-func printSourceSnippet(w io.Writer, loc diagnosticLocation, fsys fs.FS, path string) {
+func printSourceSnippet(w io.Writer, s termStyle, loc diagnosticLocation, fsys fs.FS, severityColor func(string) string, path string) {
 	content, err := fs.ReadFile(fsys, snippetSourcePath(fsys, path, loc.filePath))
 	if err != nil {
-		fmt.Fprintf(w, "%*s | Could not read source file: %v\n", loc.numWidth, "", err)
+		fmt.Fprintf(w, "%*s %s %s\n", loc.numWidth, "", s.cyan("|"), severityColor(fmt.Sprintf("Could not read source file: %v", err)))
 		return
 	}
 	lines := strings.Split(string(content), "\n")
@@ -127,9 +164,9 @@ func printSourceSnippet(w io.Writer, loc diagnosticLocation, fsys fs.FS, path st
 		var highlightLen int
 		startCol, _, highlightLen = computeTrimmedCaretSpan(lineContent, startCol, endCol)
 
-		fmt.Fprintf(w, "%*s | %s\n", loc.numWidth, lineNumStr, lineContent)
+		fmt.Fprintf(w, "%*s %s\n", loc.numWidth, s.cyan(lineNumStr), s.cyan("|")+" "+lineContent)
 		pointer := buildPointer(lineContent, startCol, highlightLen)
-		fmt.Fprintf(w, "%*s | %s\n", loc.numWidth, "", pointer)
+		fmt.Fprintf(w, "%*s %s %s\n", loc.numWidth, "", s.cyan("|"), severityColor(pointer))
 	}
 }
 

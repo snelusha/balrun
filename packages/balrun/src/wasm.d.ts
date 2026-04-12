@@ -6,5 +6,9 @@ declare global {
 		run(instance: WebAssembly.Instance): Promise<void>;
 	}
 
-	var run: (proxy: FS, path: string) => { error?: string } | null;
+	var run: (
+		proxy: FS,
+		path: string,
+		colors?: boolean,
+	) => { error?: string } | null;
 }
