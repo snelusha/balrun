@@ -1,6 +1,4 @@
-# balrun
-
-Run Ballerina anywhere.
+![banner](https://raw.githubusercontent.com/snelusha/balrun/main/.github/assets/banner.png)
 
 ## Installation
 
@@ -49,3 +47,7 @@ class MemFS implements FS {
 
 const result = await new Ballerina({ fs: new MemFS() }).run("main.bal");
 ```
+
+## Acknowledgements
+
+Built on [ballerina-lang-go](https://github.com/ballerina-platform/ballerina-lang-go), the Ballerina platform's Go-based compiler and runtime.
