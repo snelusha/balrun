@@ -72,8 +72,8 @@ func (l *bridgeFS) Open(name string) (fs.File, error) {
 		return l.openDir(name, result)
 	}
 
-	return &localStorageFileHandle{
-		info: &localStorageFileInfo{
+	return &bridgeFileHandle{
+		info: &bridgeFileInfo{
 			name:    path.Base(name),
 			size:    int64(result.Get("size").Int()),
 			isDir:   false,
@@ -84,21 +84,21 @@ func (l *bridgeFS) Open(name string) (fs.File, error) {
 }
 
 func (l *bridgeFS) openDir(name string, stat js.Value) (fs.File, error) {
-	localStorageEntries := l.proxy.Call("readDir", name)
-	if localStorageEntries.IsNull() || localStorageEntries.IsUndefined() {
+	bridgeEntries := l.proxy.Call("readDir", name)
+	if bridgeEntries.IsNull() || bridgeEntries.IsUndefined() {
 		return nil, &fs.PathError{Op: "readDir", Path: name, Err: fs.ErrNotExist}
 	}
-	entries := make([]fs.DirEntry, localStorageEntries.Length())
-	for i := 0; i < localStorageEntries.Length(); i++ {
-		e := localStorageEntries.Index(i)
-		entries[i] = &localStorageDirEntry{
+	entries := make([]fs.DirEntry, bridgeEntries.Length())
+	for i := 0; i < bridgeEntries.Length(); i++ {
+		e := bridgeEntries.Index(i)
+		entries[i] = &bridgeDirEntry{
 			name:  e.Get("name").String(),
 			isDir: e.Get("isDir").Bool(),
 		}
 	}
 
-	return &localStorageDirHandle{
-		info: &localStorageFileInfo{
+	return &bridgeDirHandle{
+		info: &bridgeFileInfo{
 			name:    path.Base(name),
 			isDir:   true,
 			modTime: time.Unix(int64(stat.Get("modTime").Int()), 0),
@@ -116,35 +116,35 @@ func (l *bridgeFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 }
 
 type (
-	localStorageFileHandle struct {
-		info   *localStorageFileInfo
+	bridgeFileHandle struct {
+		info   *bridgeFileInfo
 		reader *bytes.Reader
 	}
-	localStorageDirHandle struct {
-		info    *localStorageFileInfo
+	bridgeDirHandle struct {
+		info    *bridgeFileInfo
 		entries []fs.DirEntry
 		offset  int
 	}
-	localStorageFileInfo struct {
+	bridgeFileInfo struct {
 		name    string
 		size    int64
 		isDir   bool
 		modTime time.Time
 	}
-	localStorageDirEntry struct {
+	bridgeDirEntry struct {
 		name  string
 		isDir bool
 	}
 )
 
-func (h *localStorageFileHandle) Close() error               { return nil }
-func (h *localStorageFileHandle) Read(p []byte) (int, error) { return h.reader.Read(p) }
-func (h *localStorageFileHandle) Stat() (fs.FileInfo, error) { return h.info, nil }
+func (h *bridgeFileHandle) Close() error               { return nil }
+func (h *bridgeFileHandle) Read(p []byte) (int, error) { return h.reader.Read(p) }
+func (h *bridgeFileHandle) Stat() (fs.FileInfo, error) { return h.info, nil }
 
-func (h *localStorageDirHandle) Close() error               { return nil }
-func (h *localStorageDirHandle) Read([]byte) (int, error)   { return 0, io.EOF }
-func (h *localStorageDirHandle) Stat() (fs.FileInfo, error) { return h.info, nil }
-func (h *localStorageDirHandle) ReadDir(n int) ([]fs.DirEntry, error) {
+func (h *bridgeDirHandle) Close() error               { return nil }
+func (h *bridgeDirHandle) Read([]byte) (int, error)   { return 0, io.EOF }
+func (h *bridgeDirHandle) Stat() (fs.FileInfo, error) { return h.info, nil }
+func (h *bridgeDirHandle) ReadDir(n int) ([]fs.DirEntry, error) {
 	if n <= 0 {
 		res := h.entries[h.offset:]
 		h.offset = len(h.entries)
@@ -162,27 +162,27 @@ func (h *localStorageDirHandle) ReadDir(n int) ([]fs.DirEntry, error) {
 	return res, nil
 }
 
-func (i *localStorageFileInfo) Name() string { return i.name }
-func (i *localStorageFileInfo) Size() int64  { return i.size }
-func (i *localStorageFileInfo) Mode() fs.FileMode {
+func (i *bridgeFileInfo) Name() string { return i.name }
+func (i *bridgeFileInfo) Size() int64  { return i.size }
+func (i *bridgeFileInfo) Mode() fs.FileMode {
 	if i.isDir {
 		return fs.ModeDir | 0o755
 	}
 	return 0o644
 }
-func (i *localStorageFileInfo) ModTime() time.Time { return i.modTime }
-func (i *localStorageFileInfo) IsDir() bool        { return i.isDir }
-func (i *localStorageFileInfo) Sys() any           { return nil }
+func (i *bridgeFileInfo) ModTime() time.Time { return i.modTime }
+func (i *bridgeFileInfo) IsDir() bool        { return i.isDir }
+func (i *bridgeFileInfo) Sys() any           { return nil }
 
-func (d *localStorageDirEntry) Name() string { return d.name }
-func (d *localStorageDirEntry) IsDir() bool  { return d.isDir }
-func (d *localStorageDirEntry) Type() fs.FileMode {
+func (d *bridgeDirEntry) Name() string { return d.name }
+func (d *bridgeDirEntry) IsDir() bool  { return d.isDir }
+func (d *bridgeDirEntry) Type() fs.FileMode {
 	if d.isDir {
 		return fs.ModeDir
 	}
 	return 0
 }
 
-func (d *localStorageDirEntry) Info() (fs.FileInfo, error) {
-	return &localStorageFileInfo{name: d.name, isDir: d.isDir}, nil
+func (d *bridgeDirEntry) Info() (fs.FileInfo, error) {
+	return &bridgeFileInfo{name: d.name, isDir: d.isDir}, nil
 }
