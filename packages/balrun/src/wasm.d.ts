@@ -9,6 +9,14 @@ declare global {
 	var run: (
 		proxy: FS,
 		path: string,
-		colors?: boolean,
+		options?:
+			| boolean
+			| {
+					colors: boolean;
+					stdout?: { write(s: string): void };
+					stderr?: { write(s: string): void };
+			  },
 	) => { error?: string } | null;
 }
+
+export {};

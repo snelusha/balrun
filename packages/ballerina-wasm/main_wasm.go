@@ -5,8 +5,11 @@ import (
 	"ballerina-lang-go/projects"
 	"ballerina-lang-go/projects/directory"
 	"ballerina-lang-go/runtime"
+	"ballerina-lang-go/values"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"syscall/js"
 )
 
@@ -17,9 +20,10 @@ func main() {
 }
 
 func run(this js.Value, args []js.Value) any {
+	var stderrWriter io.Writer = os.Stderr
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", r)
+			fmt.Fprintf(stderrWriter, "%v\n", r)
 		}
 	}()
 
@@ -30,10 +34,11 @@ func run(this js.Value, args []js.Value) any {
 	proxy := args[0]
 	path := args[1].String()
 
-	noColors := false
-	if len(args) >= 3 && !args[2].IsUndefined() {
-		noColors = !args[2].Bool()
+	opts := js.Undefined()
+	if len(args) >= 3 {
+		opts = args[2]
 	}
+	stdoutWriter, stderrWriter, noColors := parseRunWriters(opts)
 
 	fsys := NewBridgeFS(proxy)
 
@@ -44,7 +49,7 @@ func run(this js.Value, args []js.Value) any {
 
 	diags := result.Diagnostics()
 	if diags.HasErrors() {
-		printDiagnostics(fsys, path, os.Stderr, diags, noColors)
+		printDiagnostics(fsys, path, stderrWriter, diags, noColors)
 		return nil
 	}
 
@@ -54,7 +59,7 @@ func run(this js.Value, args []js.Value) any {
 	compilation := pkg.Compilation()
 	diags = compilation.DiagnosticResult()
 	if diags.HasErrors() {
-		printDiagnostics(fsys, path, os.Stderr, diags, noColors)
+		printDiagnostics(fsys, path, stderrWriter, diags, noColors)
 		return nil
 	}
 
@@ -66,7 +71,7 @@ func run(this js.Value, args []js.Value) any {
 	}
 
 	rt := runtime.NewRuntime()
-
+	runtime.RegisterExternFunction(rt, "ballerina", "io", "println", capturePrintlnOutput(stdoutWriter))
 	for _, birPkg := range birPkgs {
 		if err := rt.Interpret(*birPkg); err != nil {
 			return jsError(err)
@@ -74,6 +79,20 @@ func run(this js.Value, args []js.Value) any {
 	}
 
 	return nil
+}
+
+func capturePrintlnOutput(w io.Writer) func(args []values.BalValue) (values.BalValue, error) {
+	return func(args []values.BalValue) (values.BalValue, error) {
+		var b strings.Builder
+		visited := make(map[uintptr]bool)
+		for _, arg := range args {
+			b.WriteString(values.String(arg, visited))
+		}
+		b.WriteByte('\n')
+		_, err := io.WriteString(w, b.String())
+
+		return nil, err
+	}
 }
 
 func jsError(err error) map[string]any {
