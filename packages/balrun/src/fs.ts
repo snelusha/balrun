@@ -15,11 +15,11 @@ export type StatResult = {
 export type ReadDirResult = { name: string; isDir: boolean }[] | null;
 
 export interface FS {
-	open(path: string): OpenResult;
-	stat(path: string): StatResult;
-	readDir(path: string): ReadDirResult;
-	writeFile(path: string, content: string): boolean;
-	remove(path: string): boolean;
-	move(oldPath: string, newPath: string): boolean;
-	mkdirAll(path: string): boolean;
+	open(path: string): Promise<OpenResult>;
+	stat(path: string): Promise<StatResult>;
+	readDir(path: string): Promise<ReadDirResult>;
+	writeFile(path: string, content: string): Promise<boolean>;
+	remove(path: string): Promise<boolean>;
+	move(oldPath: string, newPath: string): Promise<boolean>;
+	mkdirAll(path: string): Promise<boolean>;
 }
