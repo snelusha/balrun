@@ -2,6 +2,15 @@
 	"name": "@snelusha/balrun",
 	"version": "0.2.0",
 	"description": "Run Ballerina anywhere!",
+	"keywords": [
+		"ballerina",
+		"interpreter",
+		"runtime",
+		"wasm",
+		"webassembly",
+		"typescript",
+		"cli"
+	],
 	"license": "MIT",
 	"author": {
 		"name": "Sithija Nelusha Silva",
