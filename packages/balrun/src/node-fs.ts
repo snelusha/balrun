@@ -1,50 +1,35 @@
 import fs from "node:fs";
 import { basename } from "node:path";
 
-import type { FS } from "./fs";
+import type { FS, OpenResult, StatResult } from "./fs";
 
 export class NodeFS implements FS {
-	open(path: string): {
-		content: string;
-		size: number;
-		modTime: number;
-		isDir: boolean;
-	} | null {
-		try {
-			const stats = fs.statSync(path);
-			if (stats.isDirectory()) {
-				return {
-					content: "",
-					size: stats.size,
-					modTime: stats.mtimeMs,
-					isDir: true,
-				};
-			}
-			const content = fs.readFileSync(path, "utf-8");
+	async open(path: string): Promise<OpenResult> {
+		const stats = await fs.promises.stat(path);
+		if (stats.isDirectory()) {
 			return {
-				content,
+				content: "",
 				size: stats.size,
 				modTime: stats.mtimeMs,
-				isDir: false,
+				isDir: true,
 			};
-		} catch {
-			return null;
 		}
+		const content = await fs.promises.readFile(path, "utf-8");
+		return {
+			content,
+			size: stats.size,
+			modTime: stats.mtimeMs,
+			isDir: false,
+		};
 	}
-	stat(
-		path: string,
-	): { name: string; size: number; modTime: number; isDir: boolean } | null {
-		try {
-			const stats = fs.statSync(path);
-			return {
-				name: basename(path),
-				size: stats.size,
-				modTime: stats.mtimeMs,
-				isDir: stats.isDirectory(),
-			};
-		} catch {
-			return null;
-		}
+	async stat(path: string): Promise<StatResult> {
+		const stats = await fs.promises.stat(path);
+		return {
+			name: basename(path),
+			size: stats.size,
+			modTime: stats.mtimeMs,
+			isDir: stats.isDirectory(),
+		};
 	}
 	readDir(path: string): { name: string; isDir: boolean }[] | null {
 		try {

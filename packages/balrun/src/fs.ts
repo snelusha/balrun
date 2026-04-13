@@ -15,8 +15,8 @@ export type StatResult = {
 export type ReadDirResult = { name: string; isDir: boolean }[] | null;
 
 export interface FS {
-	open(path: string): OpenResult;
-	stat(path: string): StatResult;
+	open(path: string): Promise<OpenResult>;
+	stat(path: string): Promise<StatResult>;
 	readDir(path: string): ReadDirResult;
 	writeFile(path: string, content: string): boolean;
 	remove(path: string): boolean;
