@@ -20,6 +20,8 @@ export class Ballerina {
 
 	async run(path: string): Promise<{ error?: string } | null> {
 		await setup();
-		return globalThis.run(this.fs, path, this.colors);
+		return globalThis.run(this.fs, path, {
+			colors: this.colors,
+		});
 	}
 }
