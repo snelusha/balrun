@@ -19,6 +19,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.11",
+		"@rollup/plugin-url": "^8.0.2",
 		"@types/semver": "^7.7.1",
 		"semver": "^7.7.4",
 		"turbo": "^2.9.6"

@@ -17,3 +17,8 @@ declare global {
 		},
 	) => { error?: string } | null;
 }
+
+declare module "*.wasm" {
+	const src: string;
+	export default src;
+}
