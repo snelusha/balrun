@@ -1,27 +1,40 @@
 import { setup } from "./wasm-runtime";
-
 import { NodeFS } from "./node-fs";
 
 import type { FS } from "./fs";
 
-export interface BallerinaOptions {
-	fs?: FS;
+export type StreamWriter = {
+	write(chunk: string): void;
+};
+
+export interface BallerinaRunOptions {
 	colors?: boolean;
+	stdout?: StreamWriter;
+	stderr?: StreamWriter;
+}
+
+export interface BallerinaOptions extends BallerinaRunOptions {
+	fs?: FS;
 }
 
 export class Ballerina {
 	private readonly fs: FS;
-	private readonly colors: boolean;
+	private readonly defaults: BallerinaRunOptions;
 
 	constructor(options?: BallerinaOptions) {
 		this.fs = options?.fs ?? new NodeFS();
-		this.colors = options?.colors ?? true;
+		this.defaults = {
+			colors: options?.colors ?? true,
+			stdout: options?.stdout,
+			stderr: options?.stderr,
+		};
 	}
 
-	async run(path: string): Promise<{ error?: string } | null> {
+	async run(
+		path: string,
+		options?: BallerinaRunOptions,
+	): Promise<{ error?: string } | null> {
 		await setup();
-		return globalThis.run(this.fs, path, {
-			colors: this.colors,
-		});
+		return globalThis.run(this.fs, path, { ...this.defaults, ...options });
 	}
 }
