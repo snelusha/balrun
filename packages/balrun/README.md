@@ -12,52 +12,69 @@ npm install @snelusha/balrun
 npx @snelusha/balrun ./main.bal
 ```
 
-Give a `.bal` file, a package directory, or `.` for the current package.
+Accepts a `.bal` file, a package directory, or `.` for the current package.
 
 ## Usage
 
 ```ts
 import { Ballerina } from "@snelusha/balrun";
 
-const ballerina = new Ballerina();
+const ballerina = new Ballerina({ colors: false });
 
-// null on success, or { error: "..." } on failure
-const result = await ballerina.run("./main.bal");
+// Returns null on success, or { error: "..." } on failure
+const result = await ballerina.run("./main.bal", { colors: true });
 ```
+
+Options passed to `run()` override the constructor defaults for that call only.
+
+## Options
 
 ### `colors`
 
-By default, diagnostics are printed with ANSI colors. Pass `colors: false` to disable them.
+Diagnostics use ANSI colors by default. Pass `colors: false` to disable. The CLI auto-detects based on `stderr.isTTY`.
+
+### `stdout` / `stderr`
+
+Redirect runtime output by passing any object that implements `StreamWriter`:
 
 ```ts
-await new Ballerina({ colors: false }).run("./main.bal");
+import type { StreamWriter } from "@snelusha/balrun";
+
+const writer: StreamWriter = { write(chunk: string) {} };
 ```
 
-The `balrun` CLI sets `colors: Boolean(process.stderr.isTTY)`, so colors are on in interactive terminals and off when stderr is piped.
+Example:
 
-### Custom `FS`
+```ts
+import { Ballerina, type StreamWriter } from "@snelusha/balrun";
 
-By default, `Ballerina` uses `NodeFS` to read files from disk. You can swap this out with any custom filesystem by implementing the `FS` interface and passing it in.
+const buffer: string[] = [];
+const writer: StreamWriter = { write(chunk) { buffer.push(chunk); } };
+
+await new Ballerina({ stdout: writer, stderr: writer }).run("./main.bal");
+```
+
+### `fs`
+
+By default, `Ballerina` reads from disk via `NodeFS`. Swap it out by implementing the `FS` interface — useful for in-memory or virtual filesystems.
 
 ```ts
 import { Ballerina, type FS } from "@snelusha/balrun";
 
 class MemFS implements FS {
-	// When running a single file, only `open` and `stat` are required.
-	// When running a package, `readDir` is also required.
+  // When running a single file, only `open` and `stat` are required.
+  // When running a package, `readDir` is also required.
 }
 
-const fs = new MemFS({ "main.bal": `...` });
-await new Ballerina({ fs }).run("main.bal");
+await new Ballerina({ fs: new MemFS() }).run("main.bal");
 ```
 
-See [`examples/mem-fs`](https://github.com/snelusha/balrun/tree/main/packages/balrun/examples/mem-fs) for a full `MemFS` implementation.
+See [`examples/mem-fs`](https://github.com/snelusha/balrun/tree/main/packages/balrun/examples/mem-fs) for a full implementation.
 
 ## Limitations
 
-- The `FS` interface is synchronous only; asynchronous filesystems are not supported.
-- Ballerina program output is always written to the process console (stdout/stderr) and cannot be redirected or configured to another sink from this API.
+- The `FS` interface is synchronous only.
 
 ## Acknowledgements
 
-Built on [ballerina-lang-go](https://github.com/ballerina-platform/ballerina-lang-go), the Ballerina platform's Go-based compiler and runtime.
+Built on [ballerina-lang-go](https://github.com/ballerina-platform/ballerina-lang-go).

@@ -1,4 +1,5 @@
 import type { FS } from "./fs";
+import type { StreamWriter } from "./ballerina";
 
 declare global {
 	class Go {
@@ -9,6 +10,10 @@ declare global {
 	var run: (
 		proxy: FS,
 		path: string,
-		options?: { colors: boolean },
+		options?: {
+			colors?: boolean;
+			stdout?: StreamWriter;
+			stderr?: StreamWriter;
+		},
 	) => { error?: string } | null;
 }
