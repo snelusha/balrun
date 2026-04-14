@@ -12,8 +12,22 @@ import (
 
 func main() {
 	js.Global().Set("run", js.FuncOf(run))
-
 	select {}
+}
+
+type runOptions struct {
+	noColors bool
+}
+
+func parseRunOptions(opts js.Value) runOptions {
+	if opts.IsUndefined() || opts.IsNull() {
+		return runOptions{}
+	}
+
+	colors := opts.Get("colors")
+	return runOptions{
+		noColors: !colors.IsUndefined() && colors.Type() == js.TypeBoolean && !colors.Bool(),
+	}
 }
 
 func run(this js.Value, args []js.Value) any {
@@ -30,10 +44,11 @@ func run(this js.Value, args []js.Value) any {
 	proxy := args[0]
 	path := args[1].String()
 
-	noColors := false
-	if len(args) >= 3 && !args[2].IsUndefined() {
-		noColors = !args[2].Bool()
+	var optsArg js.Value
+	if len(args) >= 3 {
+		optsArg = args[2]
 	}
+	opts := parseRunOptions(optsArg)
 
 	fsys := NewBridgeFS(proxy)
 
@@ -42,31 +57,23 @@ func run(this js.Value, args []js.Value) any {
 		return jsError(err)
 	}
 
-	diags := result.Diagnostics()
-	if diags.HasErrors() {
-		printDiagnostics(fsys, path, os.Stderr, diags, noColors)
+	if diags := result.Diagnostics(); diags.HasErrors() {
+		printDiagnostics(fsys, path, os.Stderr, diags, opts.noColors)
 		return nil
 	}
 
-	project := result.Project()
-	pkg := project.CurrentPackage()
-
-	compilation := pkg.Compilation()
-	diags = compilation.DiagnosticResult()
-	if diags.HasErrors() {
-		printDiagnostics(fsys, path, os.Stderr, diags, noColors)
+	compilation := result.Project().CurrentPackage().Compilation()
+	if diags := compilation.DiagnosticResult(); diags.HasErrors() {
+		printDiagnostics(fsys, path, os.Stderr, diags, opts.noColors)
 		return nil
 	}
 
-	backend := projects.NewBallerinaBackend(compilation)
-	birPkgs := backend.BIRPackages()
-
+	birPkgs := projects.NewBallerinaBackend(compilation).BIRPackages()
 	if len(birPkgs) == 0 {
 		return jsError(fmt.Errorf("BIR generation failed: no BIR package produced"))
 	}
 
 	rt := runtime.NewRuntime()
-
 	for _, birPkg := range birPkgs {
 		if err := rt.Interpret(*birPkg); err != nil {
 			return jsError(err)
@@ -77,7 +84,5 @@ func run(this js.Value, args []js.Value) any {
 }
 
 func jsError(err error) map[string]any {
-	return map[string]any{
-		"error": err.Error(),
-	}
+	return map[string]any{"error": err.Error()}
 }

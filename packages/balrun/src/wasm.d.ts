@@ -9,6 +9,6 @@ declare global {
 	var run: (
 		proxy: FS,
 		path: string,
-		colors?: boolean,
+		options?: { colors: boolean },
 	) => { error?: string } | null;
 }
