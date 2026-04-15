@@ -25,22 +25,34 @@ func NewBridgeFS(proxy js.Value) *bridgeFS {
 	}
 }
 
+func isFalsy(v js.Value) bool {
+	return v.IsNull() || v.IsUndefined() || (v.Type() == js.TypeBoolean && !v.Bool())
+}
+
 func (l *bridgeFS) Create(name string) (fs.File, error) {
-	l.proxy.Call("writeFile", name, "")
+	if _, err := await(l.proxy.Call("writeFile", name, "")); err != nil {
+		return nil, &fs.PathError{Op: "create", Path: name, Err: err}
+	}
 	return l.Open(name)
 }
 
-func (l *bridgeFS) MkdirAll(path string, perm fs.FileMode) error {
-	res := l.proxy.Call("mkdirAll", path)
-	if res.IsNull() || res.IsUndefined() || (res.Type() == js.TypeBoolean && !res.Bool()) {
-		return &fs.PathError{Op: "mkdirAll", Path: path, Err: fs.ErrNotExist}
+func (l *bridgeFS) MkdirAll(dirPath string, perm fs.FileMode) error {
+	res, err := await(l.proxy.Call("mkdirAll", dirPath))
+	if err != nil {
+		return &fs.PathError{Op: "mkdirAll", Path: dirPath, Err: err}
+	}
+	if isFalsy(res) {
+		return &fs.PathError{Op: "mkdirAll", Path: dirPath, Err: fs.ErrNotExist}
 	}
 	return nil
 }
 
 func (l *bridgeFS) Move(oldpath string, newpath string) error {
-	res := l.proxy.Call("move", oldpath, newpath)
-	if res.IsNull() || res.IsUndefined() || (res.Type() == js.TypeBoolean && !res.Bool()) {
+	res, err := await(l.proxy.Call("move", oldpath, newpath))
+	if err != nil {
+		return &fs.PathError{Op: "move", Path: oldpath, Err: err}
+	}
+	if isFalsy(res) {
 		return &fs.PathError{Op: "move", Path: oldpath, Err: fs.ErrNotExist}
 	}
 	return nil
@@ -51,46 +63,57 @@ func (l *bridgeFS) OpenFile(name string, _ int, _ fs.FileMode) (fs.File, error) 
 }
 
 func (l *bridgeFS) Remove(name string) error {
-	res := l.proxy.Call("remove", name)
-	if res.IsNull() || res.IsUndefined() || (res.Type() == js.TypeBoolean && !res.Bool()) {
+	res, err := await(l.proxy.Call("remove", name))
+	if err != nil {
+		return &fs.PathError{Op: "remove", Path: name, Err: err}
+	}
+	if isFalsy(res) {
 		return &fs.PathError{Op: "remove", Path: name, Err: fs.ErrNotExist}
 	}
 	return nil
 }
 
 func (l *bridgeFS) Open(name string) (fs.File, error) {
-	result := l.proxy.Call("open", name)
-	if result.IsNull() || result.IsUndefined() {
-		stat := l.proxy.Call("stat", name)
-		if !stat.IsNull() && !stat.IsUndefined() && stat.Get("isDir").Bool() {
+	res, err := await(l.proxy.Call("open", name))
+	if err != nil {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: err}
+	}
+
+	if isFalsy(res) {
+		stat, statErr := await(l.proxy.Call("stat", name))
+		if statErr == nil && !isFalsy(stat) && stat.Get("isDir").Bool() {
 			return l.openDir(name, stat)
 		}
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 	}
 
-	if result.Get("isDir").Bool() {
-		return l.openDir(name, result)
+	if res.Get("isDir").Bool() {
+		return l.openDir(name, res)
 	}
 
 	return &bridgeFileHandle{
 		info: &bridgeFileInfo{
 			name:    path.Base(name),
-			size:    int64(result.Get("size").Int()),
+			size:    int64(res.Get("size").Int()),
 			isDir:   false,
-			modTime: time.Unix(int64(result.Get("modTime").Int()), 0),
+			modTime: time.Unix(int64(res.Get("modTime").Int()), 0),
 		},
-		reader: bytes.NewReader([]byte(result.Get("content").String())),
+		reader: bytes.NewReader([]byte(res.Get("content").String())),
 	}, nil
 }
 
 func (l *bridgeFS) openDir(name string, stat js.Value) (fs.File, error) {
-	bridgeEntries := l.proxy.Call("readDir", name)
-	if bridgeEntries.IsNull() || bridgeEntries.IsUndefined() {
+	raw, err := await(l.proxy.Call("readDir", name))
+	if err != nil {
+		return nil, &fs.PathError{Op: "readDir", Path: name, Err: err}
+	}
+	if isFalsy(raw) {
 		return nil, &fs.PathError{Op: "readDir", Path: name, Err: fs.ErrNotExist}
 	}
-	entries := make([]fs.DirEntry, bridgeEntries.Length())
-	for i := 0; i < bridgeEntries.Length(); i++ {
-		e := bridgeEntries.Index(i)
+
+	entries := make([]fs.DirEntry, raw.Length())
+	for i := range entries {
+		e := raw.Index(i)
 		entries[i] = &bridgeDirEntry{
 			name:  e.Get("name").String(),
 			isDir: e.Get("isDir").Bool(),
@@ -108,9 +131,8 @@ func (l *bridgeFS) openDir(name string, stat js.Value) (fs.File, error) {
 }
 
 func (l *bridgeFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
-	res := l.proxy.Call("writeFile", name, string(data))
-	if res.IsNull() || res.IsUndefined() || (res.Type() == js.TypeBoolean && !res.Bool()) {
-		return &fs.PathError{Op: "writeFile", Path: name, Err: fs.ErrNotExist}
+	if _, err := await(l.proxy.Call("writeFile", name, string(data))); err != nil {
+		return &fs.PathError{Op: "writeFile", Path: name, Err: err}
 	}
 	return nil
 }
