@@ -1,17 +1,12 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import { basename } from "node:path";
 
-import type { FS } from "./fs";
+import type { DirEntry, FS, OpenResult, StatResult } from "./fs";
 
 export class NodeFS implements FS {
-	open(path: string): {
-		content: string;
-		size: number;
-		modTime: number;
-		isDir: boolean;
-	} | null {
+	async open(path: string): Promise<OpenResult | null> {
 		try {
-			const stats = fs.statSync(path);
+			const stats = await fs.stat(path);
 			if (stats.isDirectory()) {
 				return {
 					content: "",
@@ -20,7 +15,7 @@ export class NodeFS implements FS {
 					isDir: true,
 				};
 			}
-			const content = fs.readFileSync(path, "utf-8");
+			const content = await fs.readFile(path, "utf-8");
 			return {
 				content,
 				size: stats.size,
@@ -31,11 +26,9 @@ export class NodeFS implements FS {
 			return null;
 		}
 	}
-	stat(
-		path: string,
-	): { name: string; size: number; modTime: number; isDir: boolean } | null {
+	async stat(path: string): Promise<StatResult | null> {
 		try {
-			const stats = fs.statSync(path);
+			const stats = await fs.stat(path);
 			return {
 				name: basename(path),
 				size: stats.size,
@@ -46,9 +39,9 @@ export class NodeFS implements FS {
 			return null;
 		}
 	}
-	readDir(path: string): { name: string; isDir: boolean }[] | null {
+	async readDir(path: string): Promise<DirEntry[] | null> {
 		try {
-			const entries = fs.readdirSync(path, { withFileTypes: true });
+			const entries = await fs.readdir(path, { withFileTypes: true });
 			return entries.map((entry) => ({
 				name: entry.name,
 				isDir: entry.isDirectory(),
@@ -57,33 +50,33 @@ export class NodeFS implements FS {
 			return null;
 		}
 	}
-	writeFile(path: string, content: string): boolean {
+	async writeFile(path: string, content: string): Promise<boolean> {
 		try {
-			fs.writeFileSync(path, content, "utf-8");
+			await fs.writeFile(path, content, "utf-8");
 			return true;
 		} catch {
 			return false;
 		}
 	}
-	remove(path: string): boolean {
+	async remove(path: string): Promise<boolean> {
 		try {
-			fs.rmSync(path, { recursive: true, force: true });
+			await fs.rm(path, { recursive: true, force: true });
 			return true;
 		} catch {
 			return false;
 		}
 	}
-	move(oldPath: string, newPath: string): boolean {
+	async move(oldPath: string, newPath: string): Promise<boolean> {
 		try {
-			fs.renameSync(oldPath, newPath);
+			await fs.rename(oldPath, newPath);
 			return true;
 		} catch {
 			return false;
 		}
 	}
-	mkdirAll(path: string): boolean {
+	async mkdirAll(path: string): Promise<boolean> {
 		try {
-			fs.mkdirSync(path, { recursive: true });
+			await fs.mkdir(path, { recursive: true });
 			return true;
 		} catch {
 			return false;
