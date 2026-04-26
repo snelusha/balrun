@@ -71,10 +71,6 @@ await new Ballerina({ fs: new MemFS() }).run("main.bal");
 
 See [`examples/mem-fs`](https://github.com/snelusha/balrun/tree/main/packages/balrun/examples/mem-fs) for a full implementation.
 
-## Limitations
-
-- The `FS` interface is synchronous only.
-
 ## Acknowledgements
 
 Built on [ballerina-lang-go](https://github.com/ballerina-platform/ballerina-lang-go).
