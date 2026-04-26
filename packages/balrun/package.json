@@ -45,12 +45,14 @@
   },
   "scripts": {
     "build": "tsdown && cp ../ballerina-wasm/dist/ballerina.wasm dist/ballerina.wasm",
-    "clean": "git clean -xdf .turbo dist"
+    "clean": "git clean -xdf .turbo dist",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/bun": "^1.3.11",
     "@types/node": "^25.6.0",
     "tsdown": "^0.21.7",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.5"
   }
 }
