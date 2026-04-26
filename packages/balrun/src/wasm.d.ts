@@ -15,5 +15,5 @@ declare global {
 			stdout?: StreamWriter;
 			stderr?: StreamWriter;
 		},
-	) => { error?: string } | null;
+	) => Promise<{ error?: string } | null>;
 }

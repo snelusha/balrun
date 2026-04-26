@@ -16,6 +16,8 @@ var (
 	_ bfs.MutableFS  = &bridgeFS{}
 )
 
+var OperationFailedError = errors.New("operation failed")
+
 type bridgeFS struct {
 	proxy js.Value
 }
@@ -35,8 +37,12 @@ func pathError(op, path string, err error) error {
 }
 
 func (l *bridgeFS) Create(name string) (fs.File, error) {
-	if _, err := l.bridgeCall("create", name, "writeFile", name, ""); err != nil {
+	res, err := l.bridgeCall("create", name, "writeFile", name, "")
+	if err != nil {
 		return nil, err
+	}
+	if isFalsy(res) {
+		return nil, pathError("create", name, OperationFailedError)
 	}
 	return l.Open(name)
 }
@@ -47,7 +53,7 @@ func (l *bridgeFS) MkdirAll(dirPath string, perm fs.FileMode) error {
 		return err
 	}
 	if isFalsy(res) {
-		return pathError("mkdirAll", dirPath, errors.New("operation failed"))
+		return pathError("mkdirAll", dirPath, OperationFailedError)
 	}
 	return nil
 }
@@ -58,7 +64,7 @@ func (l *bridgeFS) Move(oldpath string, newpath string) error {
 		return err
 	}
 	if isFalsy(res) {
-		return pathError("move", oldpath, fs.ErrNotExist)
+		return pathError("move", oldpath, OperationFailedError)
 	}
 	return nil
 }
@@ -73,7 +79,7 @@ func (l *bridgeFS) Remove(name string) error {
 		return err
 	}
 	if isFalsy(res) {
-		return pathError("remove", name, fs.ErrNotExist)
+		return pathError("remove", name, OperationFailedError)
 	}
 	return nil
 }
@@ -86,7 +92,10 @@ func (l *bridgeFS) Open(name string) (fs.File, error) {
 
 	if isFalsy(res) {
 		stat, statErr := l.bridgeCall("stat", name, "stat", name)
-		if statErr == nil && !isFalsy(stat) && stat.Get("isDir").Bool() {
+		if statErr != nil {
+			return nil, statErr
+		}
+		if !isFalsy(stat) && stat.Get("isDir").Bool() {
 			return l.openDir(name, stat)
 		}
 		return nil, pathError("open", name, fs.ErrNotExist)
@@ -136,8 +145,12 @@ func (l *bridgeFS) openDir(name string, stat js.Value) (fs.File, error) {
 }
 
 func (l *bridgeFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
-	if _, err := l.bridgeCall("writeFile", name, "writeFile", name, string(data)); err != nil {
+	res, err := l.bridgeCall("writeFile", name, "writeFile", name, string(data))
+	if err != nil {
 		return err
+	}
+	if isFalsy(res) {
+		return pathError("writeFile", name, OperationFailedError)
 	}
 	return nil
 }
