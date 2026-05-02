@@ -11,14 +11,14 @@ class MemFS implements FS {
 		}
 	}
 
-	open(path: string) {
+	async open(path: string) {
 		const content = this.files.get(path);
 		return content == null
 			? null
 			: { content, size: content.length, modTime: 0, isDir: false };
 	}
 
-	stat(path: string) {
+	async stat(path: string) {
 		if (path === ".") {
 			return { name: ".", size: 0, modTime: 0, isDir: true };
 		}
@@ -28,7 +28,7 @@ class MemFS implements FS {
 			: { name: path, size: content.length, modTime: 0, isDir: false };
 	}
 
-	readDir(path: string) {
+	async readDir(path: string) {
 		if (path === ".") {
 			return Array.from(this.files.keys()).map((name) => ({
 				name,
@@ -38,16 +38,16 @@ class MemFS implements FS {
 		return null;
 	}
 
-	writeFile(): boolean {
+	async writeFile(): Promise<boolean> {
 		throw new Error("Method not implemented.");
 	}
-	remove(): boolean {
+	async remove(): Promise<boolean> {
 		throw new Error("Method not implemented.");
 	}
-	move(): boolean {
+	async move(): Promise<boolean> {
 		throw new Error("Method not implemented.");
 	}
-	mkdirAll(): boolean {
+	async mkdirAll(): Promise<boolean> {
 		throw new Error("Method not implemented.");
 	}
 }
