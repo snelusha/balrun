@@ -16,7 +16,7 @@
     },
     "packages/balrun": {
       "name": "@snelusha/balrun",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "bin": {
         "balrun": "./bin/cli.mjs",
       },
@@ -25,6 +25,9 @@
         "@types/node": "^25.6.0",
         "tsdown": "^0.21.7",
         "typescript": "^6.0.2",
+      },
+      "peerDependencies": {
+        "react": "^19.2.5",
       },
     },
   },
@@ -172,6 +175,8 @@
     "picomatch": ["picomatch@4.0.4", "", {}, "sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A=="],
 
     "quansync": ["quansync@1.0.0", "", {}, "sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA=="],
+
+    "react": ["react@19.2.5", "", {}, "sha512-llUJLzz1zTUBrskt2pwZgLq59AemifIftw4aB7JxOqf1HY2FDaGDxgwpAPVzHU1kdWabH7FauP4i1oEeer2WCA=="],
 
     "resolve-pkg-maps": ["resolve-pkg-maps@1.0.0", "", {}, "sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw=="],
 

@@ -34,6 +34,11 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
+    },
+    "./react": {
+      "types": "./dist/react.d.mts",
+      "import": "./dist/react.mjs",
+      "default": "./dist/react.mjs"
     }
   },
   "files": [
@@ -46,6 +51,9 @@
   "scripts": {
     "build": "tsdown && cp ../ballerina-wasm/dist/ballerina.wasm dist/ballerina.wasm",
     "clean": "git clean -xdf .turbo dist"
+  },
+  "peerDependencies": {
+    "react": "^19.2.5"
   },
   "devDependencies": {
     "@types/bun": "^1.3.11",
