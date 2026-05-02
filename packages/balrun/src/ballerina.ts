@@ -1,4 +1,4 @@
-import { setup } from "./wasm-runtime";
+import { WasmBridge } from "./wasm-bridge";
 import { NodeFS } from "./node-fs";
 
 import type { FS } from "./fs";
@@ -20,6 +20,7 @@ export interface BallerinaOptions extends BallerinaRunOptions {
 export class Ballerina {
 	private readonly fs: FS;
 	private readonly defaults: BallerinaRunOptions;
+	private static bridgeReady: Promise<void> | null = null;
 
 	constructor(options?: BallerinaOptions) {
 		this.fs = options?.fs ?? new NodeFS();
@@ -34,7 +35,14 @@ export class Ballerina {
 		path: string,
 		options?: BallerinaRunOptions,
 	): Promise<{ error?: string } | null> {
-		await setup();
+		Ballerina.bridgeReady ??= (async () => {
+			const bridge = await WasmBridge.load();
+			await bridge.init();
+		})().catch((error) => {
+			Ballerina.bridgeReady = null;
+			throw error;
+		});
+		await Ballerina.bridgeReady;
 		return globalThis.run(this.fs, path, { ...this.defaults, ...options });
 	}
 }
