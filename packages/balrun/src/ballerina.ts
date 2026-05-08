@@ -11,7 +11,7 @@ export interface BallerinaOptions extends BallerinaRunOptions {
 }
 
 export class Ballerina {
-	bridge: BallerinaCore | null = null;
+	private _bridge: Promise<BallerinaCore> | null = null;
 
 	private readonly fs: FS;
 	private _coreOptions: BallerinaCore | undefined;
@@ -29,29 +29,19 @@ export class Ballerina {
 		};
 	}
 
-	async init(): Promise<this> {
-		if (this._coreOptions) {
-			this.bridge = this._coreOptions;
-		} else {
-			this.bridge = await WasmBridge.load(
-				new URL("./ballerina.wasm", import.meta.url).href,
-			);
-		}
-		return this;
+	private bridge(): Promise<BallerinaCore> {
+		this._bridge ??= this._coreOptions
+			? Promise.resolve(this._coreOptions)
+			: WasmBridge.load(new URL("./ballerina.wasm", import.meta.url).href);
+		return this._bridge;
 	}
 
 	async run(
 		path: string,
 		options?: BallerinaRunOptions,
 	): Promise<BallerinaRunResult> {
-		await this.init();
-
-		if (!this.bridge) {
-			throw new Error(
-				"Ballerina bridge is not initialized. Call init() before running.",
-			);
-		}
-		return this.bridge.run(this.fs, path, {
+		const bridge = await this.bridge();
+		return bridge.run(this.fs, path, {
 			...this.defaults,
 			...options,
 		});
