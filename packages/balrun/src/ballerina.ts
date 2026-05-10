@@ -5,6 +5,8 @@ import type { FS } from "./fs";
 import type { BallerinaCore } from "./ballerina-core";
 import type { BallerinaRunOptions, BallerinaRunResult } from "./types";
 
+const DEFAULT_WASM_PATH = new URL("./ballerina.wasm", import.meta.url).href;
+
 export interface BallerinaOptions extends BallerinaRunOptions {
 	core?: BallerinaCore;
 	fs?: FS;
@@ -32,7 +34,7 @@ export class Ballerina {
 	private bridge(): Promise<BallerinaCore> {
 		this._bridge ??= this._coreOptions
 			? Promise.resolve(this._coreOptions)
-			: WasmBridge.load(new URL("./ballerina.wasm", import.meta.url).href);
+			: WasmBridge.load(DEFAULT_WASM_PATH);
 		return this._bridge;
 	}
 
