@@ -5,7 +5,7 @@ import type { FS } from "./fs";
 import type { BallerinaRunOptions, BallerinaRunResult } from "./types";
 
 export class WasmBridge implements BallerinaCore {
-	static async load(path: string | URL): Promise<WasmBridge> {
+	static async load(path: string): Promise<WasmBridge> {
 		try {
 			const go = new Go();
 			const { instance } = await WebAssembly.instantiateStreaming(
