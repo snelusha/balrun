@@ -16,8 +16,7 @@ export class Ballerina {
 	private _bridge: Promise<BallerinaCore> | null = null;
 
 	private readonly fs: FS;
-	private _coreOptions: BallerinaCore | undefined;
-
+	private readonly _coreOptions: BallerinaCore | undefined;
 	private readonly defaults: BallerinaRunOptions;
 
 	constructor(options: BallerinaOptions = {}) {

@@ -1,15 +1,17 @@
 import "./wasm_exec";
 
-import type { BallerinaCore } from "./ballerina-core";
 import type { FS } from "./fs";
+import type { BallerinaCore } from "./ballerina-core";
 import type { BallerinaRunOptions, BallerinaRunResult } from "./types";
 
 export class WasmBridge implements BallerinaCore {
-	static async load(path: string): Promise<WasmBridge> {
+	static async load(
+		source: string | Response | PromiseLike<Response>,
+	): Promise<WasmBridge> {
 		try {
 			const go = new Go();
 			const { instance } = await WebAssembly.instantiateStreaming(
-				fetch(path),
+				typeof source === "string" ? fetch(source) : source,
 				go.importObject,
 			);
 			go.run(instance);
