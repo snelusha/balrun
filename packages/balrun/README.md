@@ -71,6 +71,23 @@ await new Ballerina({ fs: new MemFS() }).run("main.bal");
 
 See [`examples/mem-fs`](https://github.com/snelusha/balrun/tree/main/packages/balrun/examples/mem-fs) for a full implementation.
 
+### `wasmUrl` / `core`
+
+By default, `Ballerina` loads the bundled `ballerina.wasm`. Pass `wasmUrl` to load a different local path or HTTP(S) URL:
+
+```ts
+await new Ballerina({ wasmUrl: "https://example.com/ballerina.wasm" }).run("main.bal");
+```
+
+For custom loading, pass a `BallerinaCore` directly. `WasmBridge.load()` accepts a local path, URL, `Response`, or `Promise<Response>`:
+
+```ts
+import { Ballerina, WasmBridge } from "@snelusha/balrun";
+
+const core = await WasmBridge.load(fetch("/ballerina.wasm"));
+await new Ballerina({ core }).run("main.bal");
+```
+
 ## Acknowledgements
 
 Built on [ballerina-lang-go](https://github.com/ballerina-platform/ballerina-lang-go).
