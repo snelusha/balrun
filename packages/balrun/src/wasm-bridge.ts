@@ -5,7 +5,13 @@ import type {
 } from "./ballerina-core";
 import type { FS } from "./fs";
 
+export interface WasmExports {
+	run: BallerinaCore["run"];
+}
+
 export class WasmBridge implements BallerinaCore {
+	private exports: WasmExports = {} as WasmExports;
+
 	static async load(
 		source: string | Response | PromiseLike<Response>,
 	): Promise<WasmBridge> {
@@ -13,7 +19,9 @@ export class WasmBridge implements BallerinaCore {
 		const go = new Go();
 		const instance = await loadWasm(source, go.importObject);
 		go.run(instance);
-		return new WasmBridge();
+		const bridge = new WasmBridge();
+		bridge.exports = { ...globalThis };
+		return bridge;
 	}
 
 	run(
@@ -21,7 +29,7 @@ export class WasmBridge implements BallerinaCore {
 		path: string,
 		options?: BallerinaRunOptions,
 	): Promise<BallerinaRunResult> {
-		return globalThis.run(proxy, path, options);
+		return this.exports.run(proxy, path, options);
 	}
 }
 
