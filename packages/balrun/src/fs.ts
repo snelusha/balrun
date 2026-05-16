@@ -17,6 +17,9 @@ export type DirEntry = {
 	isDir: boolean;
 };
 
+/**
+ * Filesystem contract exposed to the Ballerina runtime.
+ */
 export interface FS {
 	open(path: string): Promise<OpenResult | null>;
 	stat(path: string): Promise<StatResult | null>;
