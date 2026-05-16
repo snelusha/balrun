@@ -3,6 +3,9 @@ import { basename } from "node:path";
 
 import type { DirEntry, FS, OpenResult, StatResult } from "./fs";
 
+/**
+ * Node.js filesystem implementation for the Ballerina runtime.
+ */
 export class NodeFS implements FS {
 	async open(path: string): Promise<OpenResult | null> {
 		try {
