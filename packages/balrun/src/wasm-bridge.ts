@@ -13,7 +13,6 @@ export class WasmBridge implements BallerinaCore {
 		const go = new Go();
 		const instance = await loadWasm(source, go.importObject);
 		go.run(instance);
-		await new Promise((resolve) => setImmediate(resolve));
 		return new WasmBridge();
 	}
 
@@ -31,7 +30,7 @@ function loadWasm(
 	importObject: WebAssembly.Imports,
 ): Promise<WebAssembly.Instance> {
 	if (typeof source === "string") {
-		if (isRemoteUrl(source)) return loadRemote(source, importObject);
+		if (shouldFetch(source)) return loadRemote(source, importObject);
 		else return loadLocal(source, importObject);
 	} else {
 		return loadFromResponse(source, importObject);
@@ -42,11 +41,8 @@ async function loadRemote(
 	url: string,
 	importObject: WebAssembly.Imports,
 ): Promise<WebAssembly.Instance> {
-	const { instance } = await WebAssembly.instantiateStreaming(
-		fetch(url),
-		importObject,
-	);
-	return instance;
+	const response = await fetch(url);
+	return loadFromResponse(response, importObject);
 }
 
 async function loadLocal(
@@ -60,17 +56,32 @@ async function loadLocal(
 }
 
 async function loadFromResponse(
-	response: Response | PromiseLike<Response>,
+	source: Response | PromiseLike<Response>,
 	importObject: WebAssembly.Imports,
 ): Promise<WebAssembly.Instance> {
-	const { instance } = await WebAssembly.instantiateStreaming(
-		response instanceof Response ? Promise.resolve(response) : response,
-		importObject,
-	);
-	return instance;
+	const response = await source;
+	if (!response.ok) {
+		throw new Error(
+			`Failed to load WASM: ${response.status} ${response.statusText}`,
+		);
+	}
+
+	try {
+		const { instance } = await WebAssembly.instantiateStreaming(
+			response.clone(),
+			importObject,
+		);
+		return instance;
+	} catch {
+		const buffer = await response.arrayBuffer();
+		const { instance } = await WebAssembly.instantiate(buffer, importObject);
+		return instance;
+	}
 }
 
-function isRemoteUrl(source: string): boolean {
+function shouldFetch(source: string): boolean {
+	// In a browser environment, we can assume all string sources are URLs.
+	if (typeof window !== "undefined") return true;
 	try {
 		const url = new URL(source);
 		return url.protocol === "http:" || url.protocol === "https:";

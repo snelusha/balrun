@@ -41,11 +41,17 @@ export class Ballerina {
 	}
 
 	private bridge(): Promise<BallerinaCore> {
-		this._bridge ??= this._coreOption
-			? Promise.resolve(this._coreOption)
-			: import("./wasm-bridge").then(({ WasmBridge }) =>
-					WasmBridge.load(this._wasmUrl ?? DEFAULT_WASM_PATH),
-				);
+		if (!this._bridge) {
+			const promise = this._coreOption
+				? Promise.resolve(this._coreOption)
+				: import("./wasm-bridge").then(({ WasmBridge }) =>
+						WasmBridge.load(this._wasmUrl ?? DEFAULT_WASM_PATH),
+					);
+			this._bridge = promise.catch((err) => {
+				this._bridge = null;
+				throw err;
+			});
+		}
 		return this._bridge;
 	}
 
