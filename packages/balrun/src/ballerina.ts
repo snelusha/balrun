@@ -23,7 +23,8 @@ export interface BallerinaOptions extends BallerinaRunOptions {
 export class Ballerina {
 	private _coreOption: BallerinaCore | undefined;
 	private _wasmUrl: string | undefined;
-	private _bridge: Promise<BallerinaCore> | null = null;
+	// private _bridge: Promise<BallerinaCore> | null = null;
+	private _bridge: BallerinaCore | null = null;
 
 	private _fs: FS | undefined;
 	private _defaults: BallerinaOptions;
@@ -40,19 +41,21 @@ export class Ballerina {
 		};
 	}
 
-	private bridge(): Promise<BallerinaCore> {
-		if (!this._bridge) {
-			const promise = this._coreOption
-				? Promise.resolve(this._coreOption)
-				: import("./wasm-bridge").then(({ WasmBridge }) =>
-						WasmBridge.load(this._wasmUrl ?? DEFAULT_WASM_PATH),
-					);
-			this._bridge = promise.catch((err) => {
-				this._bridge = null;
-				throw err;
-			});
+	async init(): Promise<this> {
+		try {
+			if (this._coreOption) {
+				this._bridge = this._coreOption;
+			} else {
+				this._bridge = await import("./wasm-bridge").then(({ WasmBridge }) =>
+					WasmBridge.load(this._wasmUrl ?? DEFAULT_WASM_PATH),
+				);
+			}
+			return this;
+		} catch (err) {
+			throw new Error(
+				`Ballerina: Failed to initialize the WASM bridge: ${err instanceof Error ? err.message : err}`,
+			);
 		}
-		return this._bridge;
 	}
 
 	private async fs(): Promise<FS> {
@@ -63,15 +66,24 @@ export class Ballerina {
 			);
 		}
 		const { NodeFS } = await import(/* @vite-ignore */ NODE_FS_MODULE);
-		this._fs = new NodeFS();
-		return this._fs;
+		const fs = new NodeFS();
+		this._fs = fs;
+		return fs;
 	}
 
 	async run(
 		path: string,
 		options?: BallerinaRunOptions,
 	): Promise<BallerinaRunResult> {
-		const bridge = await this.bridge();
-		return bridge.run(await this.fs(), path, { ...this._defaults, ...options });
+		// const bridge = await this.bridge();
+		if (!this._bridge) {
+			throw new Error(
+				"Ballerina: WASM bridge is not initialized. Call `init()` before running.",
+			);
+		}
+		return this._bridge.run(await this.fs(), path, {
+			...this._defaults,
+			...options,
+		});
 	}
 }

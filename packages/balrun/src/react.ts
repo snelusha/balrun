@@ -4,11 +4,25 @@ import { Ballerina, type BallerinaOptions } from "./ballerina";
 
 import type { BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
 
-export function useBallerina(options?: BallerinaOptions) {
+export interface UseBallerinaOptions extends BallerinaOptions {
+	onReady?: (ballerina: Ballerina) => void;
+}
+
+export function useBallerina(options?: UseBallerinaOptions) {
 	const ballerinaRef = useRef<Ballerina | null>(null);
+	const callbackRef = useRef({
+		onReady: options?.onReady,
+	});
+
+	callbackRef.current = { onReady: options?.onReady };
 
 	useEffect(() => {
-		ballerinaRef.current = new Ballerina(options);
+		const ballerina = new Ballerina(options);
+		ballerinaRef.current = ballerina;
+
+		ballerina.init().then(() => {
+			callbackRef.current.onReady?.(ballerina);
+		});
 
 		return () => {
 			ballerinaRef.current = null;
