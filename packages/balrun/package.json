@@ -34,6 +34,11 @@
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs",
 			"default": "./dist/index.mjs"
+		},
+		"./fs/node": {
+			"types": "./dist/fs/node.d.mts",
+			"import": "./dist/fs/node.mjs",
+			"default": "./dist/fs/node.mjs"
 		}
 	},
 	"files": [

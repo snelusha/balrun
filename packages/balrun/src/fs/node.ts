@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { basename } from "node:path";
 
-import type { DirEntry, FS, OpenResult, StatResult } from "./fs";
+import type { DirEntry, FS, OpenResult, StatResult } from "./core";
 
 /**
  * Node.js filesystem implementation for the Ballerina runtime.

@@ -3,7 +3,7 @@ import type {
 	BallerinaRunOptions,
 	BallerinaRunResult,
 } from "./ballerina-core";
-import type { FS } from "./fs";
+import type { FS } from "./fs/core";
 
 export interface WasmExports {
 	run: BallerinaCore["run"];
