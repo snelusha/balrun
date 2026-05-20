@@ -4,7 +4,9 @@ import type {
 	BallerinaRunOptions,
 	BallerinaRunResult,
 } from "./ballerina-core";
+
 const DEFAULT_WASM_PATH = new URL("./ballerina.wasm", import.meta.url).href;
+const NODE_FS_MODULE = "./fs/node";
 
 export interface BallerinaOptions extends BallerinaRunOptions {
 	/** Filesystem exposed to the Ballerina runtime. Defaults to the Node adapter in Node.js. Required in browsers. */
@@ -60,7 +62,7 @@ export class Ballerina {
 				"Ballerina requires an `fs` option in browser environments.",
 			);
 		}
-		const { NodeFS } = await import("./fs/node");
+		const { NodeFS } = await import(/* @vite-ignore */ NODE_FS_MODULE);
 		this._fs = new NodeFS();
 		return this._fs;
 	}

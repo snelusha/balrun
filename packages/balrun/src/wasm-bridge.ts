@@ -5,6 +5,8 @@ import type {
 } from "./ballerina-core";
 import type { FS } from "./fs/core";
 
+const NODE_FS_PROMISES_MODULE = "node:fs/promises";
+
 export interface WasmExports {
 	run: BallerinaCore["run"];
 }
@@ -57,7 +59,7 @@ async function loadLocal(
 	path: string,
 	importObject: WebAssembly.Imports,
 ): Promise<WebAssembly.Instance> {
-	const fs = await import("node:fs/promises");
+	const fs = await import(/* @vite-ignore */ NODE_FS_PROMISES_MODULE);
 	const buffer = await fs.readFile(toLocalPath(path));
 	const { instance } = await WebAssembly.instantiate(buffer, importObject);
 	return instance;
