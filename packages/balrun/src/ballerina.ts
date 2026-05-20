@@ -23,8 +23,8 @@ export interface BallerinaOptions extends BallerinaRunOptions {
 export class Ballerina {
 	private _coreOption: BallerinaCore | undefined;
 	private _wasmUrl: string | undefined;
-	// private _bridge: Promise<BallerinaCore> | null = null;
 	private _bridge: BallerinaCore | null = null;
+	private _bridgePromise: Promise<BallerinaCore> | null = null;
 
 	private _fs: FS | undefined;
 	private _defaults: BallerinaOptions;
@@ -42,20 +42,32 @@ export class Ballerina {
 	}
 
 	async init(): Promise<this> {
-		try {
-			if (this._coreOption) {
-				this._bridge = this._coreOption;
-			} else {
-				this._bridge = await import("./wasm-bridge").then(({ WasmBridge }) =>
-					WasmBridge.load(this._wasmUrl ?? DEFAULT_WASM_PATH),
+		await this.bridge();
+		return this;
+	}
+
+	private async bridge(): Promise<BallerinaCore> {
+		if (this._bridge) return this._bridge;
+
+		this._bridgePromise ??= (async () => {
+			try {
+				const bridge = this._coreOption
+					? this._coreOption
+					: await import("./wasm-bridge").then(({ WasmBridge }) =>
+							WasmBridge.load(this._wasmUrl ?? DEFAULT_WASM_PATH),
+						);
+
+				this._bridge = bridge;
+				return bridge;
+			} catch (err) {
+				this._bridgePromise = null;
+				throw new Error(
+					`Ballerina: Failed to initialize the WASM bridge: ${err instanceof Error ? err.message : err}`,
 				);
 			}
-			return this;
-		} catch (err) {
-			throw new Error(
-				`Ballerina: Failed to initialize the WASM bridge: ${err instanceof Error ? err.message : err}`,
-			);
-		}
+		})();
+
+		return this._bridgePromise;
 	}
 
 	private async fs(): Promise<FS> {
@@ -75,13 +87,8 @@ export class Ballerina {
 		path: string,
 		options?: BallerinaRunOptions,
 	): Promise<BallerinaRunResult> {
-		// const bridge = await this.bridge();
-		if (!this._bridge) {
-			throw new Error(
-				"Ballerina: WASM bridge is not initialized. Call `init()` before running.",
-			);
-		}
-		return this._bridge.run(await this.fs(), path, {
+		const bridge = await this.bridge();
+		return bridge.run(await this.fs(), path, {
 			...this._defaults,
 			...options,
 		});
