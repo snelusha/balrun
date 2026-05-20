@@ -6,7 +6,7 @@ import type {
 } from "./ballerina-core";
 
 const DEFAULT_WASM_PATH = new URL("./ballerina.wasm", import.meta.url).href;
-const NODE_FS_MODULE = "./fs/node";
+const NODE_FS_MODULE = "./fs/node.mjs";
 
 export interface BallerinaOptions extends BallerinaRunOptions {
 	/** Filesystem exposed to the Ballerina runtime. Defaults to the Node adapter in Node.js. Required in browsers. */
