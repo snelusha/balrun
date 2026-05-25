@@ -4,6 +4,7 @@ export { useBallerina } from "./react";
 
 export type { FS } from "./fs/core";
 export type { BallerinaOptions } from "./ballerina";
+export type { UseBallerinaOptions, UseBallerinaResult } from "./react";
 export type {
 	BallerinaCore,
 	BallerinaRunOptions,

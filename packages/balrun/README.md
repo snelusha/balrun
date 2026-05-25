@@ -27,6 +27,25 @@ const result = await ballerina.run("./main.bal", { colors: true });
 
 Options passed to `run()` override the constructor defaults for that call only.
 
+## React
+
+```tsx
+import { useEffect } from "react";
+import { useBallerina } from "@snelusha/balrun";
+
+function App() {
+  const { run, ready, error } = useBallerina({ fs });
+
+  useEffect(() => {
+    if (ready) console.log("Ballerina runtime is ready");
+  }, [ready]);
+
+  if (error) return <p>{error.message}</p>;
+
+  return <button disabled={!ready} onClick={() => run("main.bal")}>Run</button>;
+}
+```
+
 ## Options
 
 ### `colors`
