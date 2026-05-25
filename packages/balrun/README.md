@@ -49,14 +49,18 @@ Example:
 import { Ballerina, type StreamWriter } from "@snelusha/balrun";
 
 const buffer: string[] = [];
-const writer: StreamWriter = { write(chunk) { buffer.push(chunk); } };
+const writer: StreamWriter = {
+  write(chunk) {
+    buffer.push(chunk);
+  },
+};
 
 await new Ballerina({ stdout: writer, stderr: writer }).run("./main.bal");
 ```
 
 ### `fs`
 
-By default, `Ballerina` reads from disk via `NodeFS`. Swap it out by implementing the `FS` interface — useful for in-memory or virtual filesystems.
+`Ballerina` reads files through the `FS` interface. In Node.js environments, this defaults to the built-in Node adapter. In browsers, pass an `fs` implementation explicitly.
 
 ```ts
 import { Ballerina, type FS } from "@snelusha/balrun";
@@ -69,6 +73,15 @@ class MemFS implements FS {
 await new Ballerina({ fs: new MemFS() }).run("main.bal");
 ```
 
+To use the Node adapter explicitly:
+
+```ts
+import { Ballerina } from "@snelusha/balrun";
+import { NodeFS } from "@snelusha/balrun/fs/node";
+
+await new Ballerina({ fs: new NodeFS() }).run("./main.bal");
+```
+
 See [`examples/mem-fs`](https://github.com/snelusha/balrun/tree/main/packages/balrun/examples/mem-fs) for a full implementation.
 
 ### `wasmUrl` / `core`
@@ -76,7 +89,9 @@ See [`examples/mem-fs`](https://github.com/snelusha/balrun/tree/main/packages/ba
 By default, `Ballerina` loads the bundled `ballerina.wasm`. Pass `wasmUrl` to load a different local path or HTTP(S) URL:
 
 ```ts
-await new Ballerina({ wasmUrl: "https://example.com/ballerina.wasm" }).run("main.bal");
+await new Ballerina({ wasmUrl: "https://example.com/ballerina.wasm" }).run(
+  "main.bal",
+);
 ```
 
 For custom loading, pass a `BallerinaCore` directly. `WasmBridge.load()` accepts a local path, URL, `Response`, or `Promise<Response>`:
