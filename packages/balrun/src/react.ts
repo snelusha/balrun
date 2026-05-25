@@ -22,7 +22,12 @@ export interface UseBallerinaOptions extends BallerinaOptions {
 
 export interface UseBallerinaResult {
 	ballerina: Ballerina | null;
+	/** Runtime is initialized and ready to run Ballerina code. */
 	ready: boolean;
+	/** Alias for `ready`, following React boolean naming conventions. */
+	isReady: boolean;
+	/** Runtime is currently initializing. */
+	isLoading: boolean;
 	error: Error | null;
 	progress: WasmLoadingProgress | null;
 	run: (
@@ -123,9 +128,13 @@ export function useBallerina(
 		[],
 	);
 
+	const isLoading = !ready && !error;
+
 	return {
 		ballerina: ballerinaRef.current,
 		ready,
+		isReady: ready,
+		isLoading,
 		error,
 		progress,
 		run,

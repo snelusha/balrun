@@ -34,22 +34,22 @@ import { useEffect } from "react";
 import { useBallerina } from "@snelusha/balrun";
 
 function App() {
-  const { run, ready, error, progress } = useBallerina({
+  const { run, isReady, isLoading, error, progress } = useBallerina({
     fs,
     onProgress: ({ percent }) => console.log(percent),
   });
 
   useEffect(() => {
-    if (ready) console.log("Ballerina runtime is ready");
-  }, [ready]);
+    if (isReady) console.log("Ballerina runtime is ready");
+  }, [isReady]);
 
   if (error) return <p>{error.message}</p>;
 
-  if (!ready) {
+  if (isLoading) {
     return <progress value={progress?.percent ?? 0} max={100} />;
   }
 
-  return <button onClick={() => run("main.bal")}>Run</button>;
+  return <button disabled={!isReady} onClick={() => run("main.bal")}>Run</button>;
 }
 ```
 

@@ -39,7 +39,8 @@
 			"types": "./dist/fs/node.d.mts",
 			"import": "./dist/fs/node.mjs",
 			"default": "./dist/fs/node.mjs"
-		}
+		},
+		"./ballerina.wasm": "./dist/ballerina.wasm"
 	},
 	"files": [
 		"bin",
