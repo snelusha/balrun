@@ -34,6 +34,11 @@
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs",
 			"default": "./dist/index.mjs"
+		},
+		"./fs/node": {
+			"types": "./dist/fs/node.d.mts",
+			"import": "./dist/fs/node.mjs",
+			"default": "./dist/fs/node.mjs"
 		}
 	},
 	"files": [
@@ -50,7 +55,7 @@
 	"devDependencies": {
 		"@types/bun": "^1.3.11",
 		"@types/node": "^25.6.0",
-		"tsdown": "^0.21.7",
+		"tsdown": "^0.22.0",
 		"typescript": "^6.0.2"
 	}
 }
