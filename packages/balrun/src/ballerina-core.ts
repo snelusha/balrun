@@ -1,4 +1,4 @@
-import type { FS } from "./fs";
+import type { FS } from "./fs/core";
 
 export type StreamWriter = {
 	write: (chunk: string) => void;

@@ -1,4 +1,4 @@
-import type { FS } from "./fs";
+import type { FS } from "./fs/core";
 import type { BallerinaRunOptions } from "./ballerina-core";
 
 declare global {
