@@ -55,6 +55,7 @@
 	},
 	"scripts": {
 		"build": "tsdown && cp ../ballerina-wasm/dist/ballerina.wasm dist/ballerina.wasm",
+		"test": "bun test",
 		"clean": "git clean -xdf .turbo dist"
 	},
 	"devDependencies": {

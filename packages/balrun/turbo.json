@@ -11,6 +11,16 @@
 				"../ballerina-wasm/dist/ballerina.wasm"
 			],
 			"outputs": ["dist/**"]
+		},
+		"test": {
+			"dependsOn": ["ballerina-wasm#build"],
+			"inputs": [
+				"src/**",
+				"test/**",
+				"package.json",
+				"../ballerina-wasm/dist/ballerina.wasm"
+			],
+			"outputs": []
 		}
 	}
 }
