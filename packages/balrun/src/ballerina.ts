@@ -43,6 +43,7 @@ export class Ballerina {
 
 	async init(): Promise<this> {
 		await this.bridge();
+		await this.fs();
 		return this;
 	}
 

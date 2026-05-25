@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Ballerina, type BallerinaOptions } from "./ballerina";
 
@@ -10,18 +10,11 @@ export function useBallerina(options?: BallerinaOptions) {
 	const [isReady, setIsReady] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
 
-	const { fs, core, wasmUrl, colors, stdout, stderr } = options ?? {};
+	const opts = useMemo(() => options ?? {}, [options]);
 
 	useEffect(() => {
 		let cancelled = false;
-		const ballerina = new Ballerina({
-			fs,
-			core,
-			wasmUrl,
-			colors,
-			stdout,
-			stderr,
-		});
+		const ballerina = new Ballerina(opts);
 
 		ballerinaRef.current = ballerina;
 		setIsReady(false);
@@ -38,9 +31,11 @@ export function useBallerina(options?: BallerinaOptions) {
 
 		return () => {
 			cancelled = true;
-			ballerinaRef.current = null;
+			if (ballerinaRef.current === ballerina) {
+				ballerinaRef.current = null;
+			}
 		};
-	}, [fs, core, wasmUrl, colors, stdout, stderr]);
+	}, [opts]);
 
 	const run = useCallback(
 		(
