@@ -34,7 +34,10 @@ import { useEffect } from "react";
 import { useBallerina } from "@snelusha/balrun";
 
 function App() {
-  const { run, ready, error } = useBallerina({ fs });
+  const { run, ready, error, progress } = useBallerina({
+    fs,
+    onProgress: ({ percent }) => console.log(percent),
+  });
 
   useEffect(() => {
     if (ready) console.log("Ballerina runtime is ready");
@@ -42,7 +45,11 @@ function App() {
 
   if (error) return <p>{error.message}</p>;
 
-  return <button disabled={!ready} onClick={() => run("main.bal")}>Run</button>;
+  if (!ready) {
+    return <progress value={progress?.percent ?? 0} max={100} />;
+  }
+
+  return <button onClick={() => run("main.bal")}>Run</button>;
 }
 ```
 
@@ -112,6 +119,8 @@ await new Ballerina({ wasmUrl: "https://example.com/ballerina.wasm" }).run(
   "main.bal",
 );
 ```
+
+`useBallerina()` also returns `progress` while the WASM binary is loading. It has `{ loaded, total?, percent? }`; `total` and `percent` are available when the server sends a `content-length` header.
 
 For custom loading, pass a `BallerinaCore` directly. `WasmBridge.load()` accepts a local path, URL, `Response`, or `Promise<Response>`:
 
