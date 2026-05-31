@@ -33,7 +33,11 @@ func (c *fetchHTTPClient) Execute(method, url string, body []byte, contentType s
 	reqCtx := &requestContext{}
 	defer reqCtx.cleanup()
 
-	options := c.buildFetchOptions(method, body, contentType, reqHeaders, reqCtx)
+	options, err := c.buildFetchOptions(method, body, contentType, reqHeaders, reqCtx)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
 	resp, err := c.executeRequest(fetch, url, options)
 	if err != nil {
 		return 0, nil, nil, err
@@ -49,7 +53,7 @@ func (c *fetchHTTPClient) Execute(method, url string, body []byte, contentType s
 	return status, respHeaders, respBody, nil
 }
 
-func (c *fetchHTTPClient) buildFetchOptions(method string, body []byte, contentType string, reqHeaders map[string][]string, reqCtx *requestContext) map[string]any {
+func (c *fetchHTTPClient) buildFetchOptions(method string, body []byte, contentType string, reqHeaders map[string][]string, reqCtx *requestContext) (map[string]any, error) {
 	options := map[string]any{
 		"method":   method,
 		"headers":  c.buildHeaders(contentType, reqHeaders),
@@ -63,12 +67,12 @@ func (c *fetchHTTPClient) buildFetchOptions(method string, body []byte, contentT
 	if c.cfg.Timeout > 0 {
 		signal, err := c.setupTimeout(reqCtx)
 		if err != nil {
-			return options
+			return options, err
 		}
 		options["signal"] = signal
 	}
 
-	return options
+	return options, nil
 }
 
 func (c *fetchHTTPClient) methodAllowsBody(method string) bool {
@@ -110,7 +114,12 @@ func (c *fetchHTTPClient) encodeBody(body []byte) js.Value {
 }
 
 func (c *fetchHTTPClient) setupTimeout(reqCtx *requestContext) (js.Value, error) {
-	controller := js.Global().Get("AbortController").New()
+	abortController := js.Global().Get("AbortController")
+	if !abortController.Truthy() {
+		return js.Undefined(), fmt.Errorf("AbortController API is not available")
+	}
+
+	controller := abortController.New()
 	if !controller.Truthy() {
 		return js.Undefined(), fmt.Errorf("failed to create AbortController")
 	}
