@@ -11,8 +11,13 @@ export interface WasmExports {
 	run: BallerinaCore["run"];
 }
 
+type GoRuntime = Go & {
+	_scheduledTimeouts?: Map<number, ReturnType<typeof setTimeout>>;
+};
+
 export class WasmBridge implements BallerinaCore {
 	private exports: WasmExports = {} as WasmExports;
+	private go: GoRuntime | null = null;
 
 	static async load(
 		source: string | Response | PromiseLike<Response>,
@@ -22,6 +27,7 @@ export class WasmBridge implements BallerinaCore {
 		const instance = await loadWasm(source, go.importObject);
 		go.run(instance);
 		const bridge = new WasmBridge();
+		bridge.go = go;
 		bridge.exports = { ...globalThis };
 		return bridge;
 	}
@@ -31,7 +37,20 @@ export class WasmBridge implements BallerinaCore {
 		path: string,
 		options?: BallerinaRunOptions,
 	): Promise<BallerinaRunResult> {
-		return this.exports.run(proxy, path, options);
+		return this.exports
+			.run(proxy, path, options)
+			.finally(() => this.clearScheduledTimeouts());
+	}
+
+	private clearScheduledTimeouts(): void {
+		// HTTP client timeouts leave Go WASM timers pending, which keeps Node alive.
+		const timeouts = this.go?._scheduledTimeouts;
+		if (!timeouts) return;
+
+		for (const timeout of timeouts.values()) {
+			clearTimeout(timeout);
+		}
+		timeouts.clear();
 	}
 }
 
