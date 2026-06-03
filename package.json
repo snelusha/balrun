@@ -11,6 +11,7 @@
 	"scripts": {
 		"build": "turbo run build",
 		"build:balrun": "turbo run build --filter=@snelusha/balrun",
+		"test": "turbo run test",
 		"format": "biome format . --write",
 		"lint": "biome check .",
 		"lint:fix": "biome check . --fix",
