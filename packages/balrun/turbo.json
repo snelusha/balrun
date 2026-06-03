@@ -14,7 +14,7 @@
 		},
 		"test": {
 			"dependsOn": ["build"],
-			"inputs": ["tests/**"],
+			"inputs": ["tests/**", "bin/**", "package.json"],
 			"outputs": []
 		}
 	}

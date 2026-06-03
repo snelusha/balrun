@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { fileURLToPath } from "node:url";
 
 const CLI_PATH = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
-// const HELLO_WORLD_FIXTURE = ;
 
 async function runCli(args: string[]) {
 	const proc = Bun.spawn([process.execPath, CLI_PATH, ...args], {
@@ -38,7 +37,10 @@ describe("CLI", () => {
 	});
 
 	it("prints runtime errors and exits 1", async () => {
-		const result = await runCli(["/tmp/balrun-missing-file.bal"]);
+		const missingPath = fileURLToPath(
+			new URL("./fixtures/does-not-exist.bal", import.meta.url),
+		);
+		const result = await runCli([missingPath]);
 
 		expect(result.exitCode).toBe(1);
 		expect(result.stderr).toContain("error:");
