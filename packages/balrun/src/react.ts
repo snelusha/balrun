@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Ballerina, type BallerinaOptions } from "./ballerina";
+import { Ballerina } from "./ballerina";
 
 import type { BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
+import type { BallerinaOptions } from "./ballerina";
 
-export function useBallerina(options?: BallerinaOptions) {
+export function useBallerina(options: BallerinaOptions = {}) {
 	const ballerinaRef = useRef<Ballerina | null>(null);
 
 	const [isReady, setIsReady] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
 
-	const opts = useMemo(() => options ?? {}, [options]);
+	const { fs, core, wasmUrl, colors, stdout, stderr } = options;
+
+	const opts = useMemo(
+		() => ({ fs, core, wasmUrl, colors, stdout, stderr }),
+		[fs, core, wasmUrl, colors, stdout, stderr],
+	);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -31,9 +37,7 @@ export function useBallerina(options?: BallerinaOptions) {
 
 		return () => {
 			cancelled = true;
-			if (ballerinaRef.current === ballerina) {
-				ballerinaRef.current = null;
-			}
+			if (ballerinaRef.current === ballerina) ballerinaRef.current = null;
 		};
 	}, [opts]);
 
@@ -42,9 +46,8 @@ export function useBallerina(options?: BallerinaOptions) {
 			path: string,
 			options?: BallerinaRunOptions,
 		): Promise<BallerinaRunResult> => {
-			if (!ballerinaRef.current || !isReady) {
+			if (!ballerinaRef.current || !isReady)
 				return Promise.reject(new Error("Ballerina instance not initialized"));
-			}
 			return ballerinaRef.current.run(path, options);
 		},
 		[isReady],
