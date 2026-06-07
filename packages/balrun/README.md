@@ -102,7 +102,7 @@ import { NodeFS } from "@snelusha/balrun/fs/node";
 await new Ballerina({ fs: new NodeFS() }).run("./main.bal");
 ```
 
-See [`examples/mem-fs`](https://github.com/snelusha/balrun/tree/main/packages/balrun/examples/mem-fs) for a full implementation.
+See [`examples/memfs`](https://github.com/snelusha/balrun/tree/main/examples/memfs) for a full implementation.
 
 ### `wasmUrl` / `core`
 

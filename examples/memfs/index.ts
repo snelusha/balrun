@@ -1,4 +1,6 @@
-import { Ballerina, type FS } from "@snelusha/balrun";
+import { Ballerina } from "@snelusha/balrun";
+
+import type { DirEntry, FS, OpenResult, StatResult } from "@snelusha/balrun";
 
 // When running a single file, only `open` and `stat` are required.
 // When running a package, `readDir` is also required.
@@ -11,14 +13,14 @@ class MemFS implements FS {
 		}
 	}
 
-	async open(path: string) {
+	async open(path: string): Promise<OpenResult | null> {
 		const content = this.files.get(path);
 		return content == null
 			? null
 			: { content, size: content.length, modTime: 0, isDir: false };
 	}
 
-	async stat(path: string) {
+	async stat(path: string): Promise<StatResult | null> {
 		if (path === ".") {
 			return { name: ".", size: 0, modTime: 0, isDir: true };
 		}
@@ -28,7 +30,7 @@ class MemFS implements FS {
 			: { name: path, size: content.length, modTime: 0, isDir: false };
 	}
 
-	async readDir(path: string) {
+	async readDir(path: string): Promise<DirEntry[] | null> {
 		if (path === ".") {
 			return Array.from(this.files.keys()).map((name) => ({
 				name,
@@ -39,16 +41,16 @@ class MemFS implements FS {
 	}
 
 	async writeFile(): Promise<boolean> {
-		throw new Error("Method not implemented.");
+		throw new Error("not implemented");
 	}
 	async remove(): Promise<boolean> {
-		throw new Error("Method not implemented.");
+		throw new Error("not implemented");
 	}
 	async move(): Promise<boolean> {
-		throw new Error("Method not implemented.");
+		throw new Error("not implemented");
 	}
 	async mkdirAll(): Promise<boolean> {
-		throw new Error("Method not implemented.");
+		throw new Error("not implemented");
 	}
 }
 
