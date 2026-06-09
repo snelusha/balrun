@@ -47,6 +47,8 @@ function RunButton() {
 
 `useBallerina()` accepts the same options as `Ballerina` and initializes the runtime.
 
+See [`examples/vite`](https://github.com/snelusha/balrun/tree/main/examples/vite) for a Vite + React browser example.
+
 ## Options
 
 ### `colors`
