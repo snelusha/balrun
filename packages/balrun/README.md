@@ -1,5 +1,8 @@
 ![banner](https://raw.githubusercontent.com/snelusha/balrun/main/.github/assets/banner.png)
 
+> [!WARNING]
+> This project is actively evolving, and APIs may change frequently.
+
 ## Installation
 
 ```bash
