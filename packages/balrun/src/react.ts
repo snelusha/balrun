@@ -11,11 +11,11 @@ export function useBallerina(options: BallerinaOptions = {}) {
 	const [isReady, setIsReady] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
 
-	const { fs, core, wasmUrl, colors, stdout, stderr } = options;
+	const { fs, core, wasmSource, colors, stdout, stderr } = options;
 
 	const opts = useMemo(
-		() => ({ fs, core, wasmUrl, colors, stdout, stderr }),
-		[fs, core, wasmUrl, colors, stdout, stderr],
+		() => ({ fs, core, wasmSource, colors, stdout, stderr }),
+		[fs, core, wasmSource, colors, stdout, stderr],
 	);
 
 	useEffect(() => {

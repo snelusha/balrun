@@ -12,17 +12,17 @@ export interface BallerinaOptions extends BallerinaRunOptions {
 	/** Filesystem exposed to the Ballerina runtime. Defaults to the Node adapter in Node.js. Required in browsers. */
 	fs?: FS;
 	/**
-	 * A pre-constructed Ballerina core. When provided, `wasmUrl` is ignored and
+	 * A pre-constructed Ballerina core. When provided, `wasmSource` is ignored and
 	 * this core is used directly instead of loading the bundled WASM binary.
 	 */
 	core?: BallerinaCore;
 	/** URL or local path of the Ballerina WASM binary to load. */
-	wasmUrl?: string;
+	wasmSource?: string;
 }
 
 export class Ballerina {
 	private _coreOption: BallerinaCore | undefined;
-	private _wasmUrl: string | undefined;
+	private _wasmSource: string | undefined;
 	private _bridge: BallerinaCore | null = null;
 	private _bridgePromise: Promise<BallerinaCore> | null = null;
 
@@ -32,7 +32,7 @@ export class Ballerina {
 	constructor(options: BallerinaOptions = {}) {
 		this._fs = options.fs;
 		this._coreOption = options.core;
-		this._wasmUrl = options.wasmUrl;
+		this._wasmSource = options.wasmSource;
 
 		this._defaults = {
 			colors: options.colors ?? true,
@@ -55,7 +55,7 @@ export class Ballerina {
 				const bridge = this._coreOption
 					? this._coreOption
 					: await import("./wasm-bridge").then(({ WasmBridge }) =>
-							WasmBridge.load(this._wasmUrl ?? DEFAULT_WASM_PATH),
+							WasmBridge.load(this._wasmSource ?? DEFAULT_WASM_PATH),
 						);
 
 				this._bridge = bridge;
