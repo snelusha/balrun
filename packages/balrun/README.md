@@ -52,6 +52,28 @@ function RunButton() {
 
 See [`examples/vite`](https://github.com/snelusha/balrun/tree/main/examples/vite) for a Vite + React browser example.
 
+## Vue
+
+```vue
+<script setup lang="ts">
+import { createBallerina } from "@snelusha/balrun/vue";
+
+const { isReady, error, run } = createBallerina({
+  fs: new SomeFS(), // Required in browser environments
+});
+</script>
+
+<template>
+  <button :disabled="!isReady" @click="run('./main.bal')">
+    {{ error ? error.message : "Run Ballerina" }}
+  </button>
+</template>
+```
+
+`createBallerina()` accepts the same options as `Ballerina` and initializes the runtime.
+
+See [`examples/vue`](https://github.com/snelusha/balrun/tree/main/examples/vue) for a Vite + Vue browser example.
+
 ## Options
 
 ### `colors`
