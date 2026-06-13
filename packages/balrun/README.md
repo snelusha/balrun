@@ -106,14 +106,12 @@ await new Ballerina({ fs: new NodeFS() }).run("./main.bal");
 
 See [`examples/memfs`](https://github.com/snelusha/balrun/tree/main/examples/memfs) for a full implementation.
 
-### `wasmUrl` / `core`
+### `wasmSource` / `core`
 
-By default, `Ballerina` loads the bundled `ballerina.wasm`. Pass `wasmUrl` to load a different local path or HTTP(S) URL:
+By default, `Ballerina` loads the bundled `ballerina.wasm`. Pass `wasmSource` to load a different local path or HTTP(S) URL:
 
 ```ts
-await new Ballerina({ wasmUrl: "https://example.com/ballerina.wasm" }).run(
-  "main.bal",
-);
+await new Ballerina({ wasmSource: "https://example.com/ballerina.wasm" }).run("main.bal");
 ```
 
 For custom loading, pass a `BallerinaCore` directly. `WasmBridge.load()` accepts a local path, URL, `Response`, or `Promise<Response>`:

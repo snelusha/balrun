@@ -80,7 +80,7 @@ describe("Ballerina", () => {
 	it("allows retrying initialization after a bridge load failure", async () => {
 		const ballerina = new Ballerina({
 			fs: new MemFS({ "main.bal": "" }),
-			wasmUrl: "https://localhost:6969/missing.wasm",
+			wasmSource: "https://localhost:6969/missing.wasm",
 		});
 
 		expect(ballerina.run("main.bal")).rejects.toThrow(
