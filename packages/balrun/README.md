@@ -126,6 +126,12 @@ const core = await WasmBridge.load(fetch("/ballerina.wasm"));
 await new Ballerina({ core }).run("main.bal");
 ```
 
+### Bundler note
+
+`ballerina.wasm` must be available in the final build output at runtime.
+
+Vite handles this automatically: it detects the default WASM URL and emits `ballerina.wasm` into `dist/assets` during `vite build`. Other bundlers may not copy the file automatically. If your built app cannot find `ballerina.wasm`, copy it from `node_modules/@snelusha/balrun/dist/ballerina.wasm` into your app's output directory, or use `wasmSource` to point to where you serve it.
+
 ## Acknowledgements
 
 Built on [ballerina-lang-go](https://github.com/ballerina-platform/ballerina-lang-go).
