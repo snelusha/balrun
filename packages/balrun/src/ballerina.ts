@@ -1,3 +1,5 @@
+import { NodeFS } from "./fs/node";
+
 import type { FS } from "./fs/core";
 import type {
 	BallerinaCore,
@@ -6,7 +8,6 @@ import type {
 } from "./ballerina-core";
 
 const DEFAULT_WASM_PATH = new URL("./ballerina.wasm", import.meta.url).href;
-const NODE_FS_MODULE = "./fs/node.mjs";
 
 export interface BallerinaOptions extends BallerinaRunOptions {
 	/** Filesystem exposed to the Ballerina runtime. Defaults to the Node adapter in Node.js. Required in browsers. */
@@ -73,12 +74,11 @@ export class Ballerina {
 
 	private async fs(): Promise<FS> {
 		if (this._fs) return this._fs;
-		if (typeof window !== "undefined") {
+		if (!supportsNodeFS())
 			throw new Error(
-				"Ballerina requires an `fs` option in browser environments.",
+				"Ballerina requires an `fs` option outside Node-compatible environments.",
 			);
-		}
-		const { NodeFS } = await import(/* @vite-ignore */ NODE_FS_MODULE);
+
 		const fs = new NodeFS();
 		this._fs = fs;
 		return fs;
@@ -94,4 +94,8 @@ export class Ballerina {
 			...options,
 		});
 	}
+}
+
+function supportsNodeFS(): boolean {
+	return typeof process !== "undefined" && !!process.versions?.node;
 }
