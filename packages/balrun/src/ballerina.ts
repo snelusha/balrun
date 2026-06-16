@@ -88,6 +88,7 @@ export class Ballerina {
 		path: string,
 		options?: BallerinaRunOptions,
 	): Promise<BallerinaRunResult> {
+		if (path === "") throw new Error("[balrun]: run path must not be empty.");
 		const bridge = await this.bridge();
 		return bridge.run(await this.fs(), path, {
 			...this._defaults,

@@ -37,6 +37,8 @@ export class WasmBridge implements BallerinaCore {
 		path: string,
 		options?: BallerinaRunOptions,
 	): Promise<BallerinaRunResult> {
+		if (path === "")
+			return Promise.reject(new Error("[balrun]: run path must not be empty."));
 		return this.exports
 			.run(proxy, path, options)
 			.finally(() => this.clearScheduledTimeouts());
@@ -59,6 +61,10 @@ function loadWasm(
 	importObject: WebAssembly.Imports,
 ): Promise<WebAssembly.Instance> {
 	if (typeof source === "string") {
+		if (source === "")
+			return Promise.reject(
+				new Error("[balrun]: WASM source must not be empty."),
+			);
 		if (shouldFetch(source)) return loadRemote(source, importObject);
 		else return loadLocal(source, importObject);
 	} else {
