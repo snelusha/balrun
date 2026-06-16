@@ -77,6 +77,15 @@ describe("Ballerina", () => {
 		expect(core.calls).toHaveLength(1);
 	});
 
+	it("throws when run path is empty", async () => {
+		const { ballerina, core } = createBallerina();
+
+		expect(ballerina.run("")).rejects.toThrow(
+			"[balrun]: run path must not be empty.",
+		);
+		expect(core.calls).toHaveLength(0);
+	});
+
 	it("allows retrying initialization after a bridge load failure", async () => {
 		const ballerina = new Ballerina({
 			fs: new MemFS({ "main.bal": "" }),

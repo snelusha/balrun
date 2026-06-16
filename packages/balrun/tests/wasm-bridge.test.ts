@@ -63,12 +63,24 @@ describe("WasmBridge", () => {
 			).rejects.toThrow();
 		});
 
+		it("throws when source is empty", async () => {
+			expect(WasmBridge.load("")).rejects.toThrow(
+				"[balrun]: WASM source must not be empty.",
+			);
+		});
+
 		it("throws on invalid local path", async () => {
 			expect(WasmBridge.load("/tmp/balrun-missing.wasm")).rejects.toThrow();
 		});
 	});
 
 	describe("run", () => {
+		it("throws when run path is empty", async () => {
+			expect(bridge.run(new MemFS({}), "")).rejects.toThrow(
+				"[balrun]: run path must not be empty.",
+			);
+		});
+
 		it("runs a Ballerina file and returns the result", async () => {
 			const fs = new MemFS({
 				"main.bal": await Bun.file(
