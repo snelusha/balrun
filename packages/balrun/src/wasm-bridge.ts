@@ -91,7 +91,7 @@ async function loadFromResponse(
 	const response = await source;
 	if (!response.ok) {
 		throw new Error(
-			`Failed to load WASM: ${response.status} ${response.statusText}`,
+			`[balrun]: failed to load WASM: ${response.status} ${response.statusText}`,
 		);
 	}
 

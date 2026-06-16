@@ -54,7 +54,7 @@ describe("WasmBridge", () => {
 				WasmBridge.load(
 					new Response("missing", { status: 404, statusText: "Not Found" }),
 				),
-			).rejects.toThrow("Failed to load WASM: 404 Not Found");
+			).rejects.toThrow("[balrun]: failed to load WASM: 404 Not Found");
 		});
 
 		it("throws on invalid URL", async () => {

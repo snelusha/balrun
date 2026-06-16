@@ -84,10 +84,10 @@ describe("Ballerina", () => {
 		});
 
 		expect(ballerina.run("main.bal")).rejects.toThrow(
-			"Ballerina: Failed to initialize the WASM bridge:",
+			"[balrun]: failed to initialize the WASM bridge:",
 		);
 		expect(ballerina.run("main.bal")).rejects.toThrow(
-			"Ballerina: Failed to initialize the WASM bridge:",
+			"[balrun]: failed to initialize the WASM bridge:",
 		);
 	});
 });
