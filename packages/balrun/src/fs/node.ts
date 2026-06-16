@@ -1,7 +1,6 @@
-import fs from "node:fs/promises";
-import { basename } from "node:path";
-
 import type { DirEntry, FS, OpenResult, StatResult } from "./core";
+
+const NODE_FS_PROMISES_MODULE = "node:fs/promises";
 
 /**
  * Node.js filesystem implementation for the Ballerina runtime.
@@ -9,6 +8,7 @@ import type { DirEntry, FS, OpenResult, StatResult } from "./core";
 export class NodeFS implements FS {
 	async open(path: string): Promise<OpenResult | null> {
 		try {
+			const fs = await nodeFs();
 			const stats = await fs.stat(path);
 			if (stats.isDirectory()) {
 				return {
@@ -31,6 +31,7 @@ export class NodeFS implements FS {
 	}
 	async stat(path: string): Promise<StatResult | null> {
 		try {
+			const fs = await nodeFs();
 			const stats = await fs.stat(path);
 			return {
 				name: basename(path),
@@ -44,6 +45,7 @@ export class NodeFS implements FS {
 	}
 	async readDir(path: string): Promise<DirEntry[] | null> {
 		try {
+			const fs = await nodeFs();
 			const entries = await fs.readdir(path, { withFileTypes: true });
 			return entries.map((entry) => ({
 				name: entry.name,
@@ -55,6 +57,7 @@ export class NodeFS implements FS {
 	}
 	async writeFile(path: string, content: string): Promise<boolean> {
 		try {
+			const fs = await nodeFs();
 			await fs.writeFile(path, content, "utf-8");
 			return true;
 		} catch {
@@ -63,6 +66,7 @@ export class NodeFS implements FS {
 	}
 	async remove(path: string): Promise<boolean> {
 		try {
+			const fs = await nodeFs();
 			await fs.rm(path, { recursive: true, force: true });
 			return true;
 		} catch {
@@ -71,6 +75,7 @@ export class NodeFS implements FS {
 	}
 	async move(oldPath: string, newPath: string): Promise<boolean> {
 		try {
+			const fs = await nodeFs();
 			await fs.rename(oldPath, newPath);
 			return true;
 		} catch {
@@ -79,10 +84,27 @@ export class NodeFS implements FS {
 	}
 	async mkdirAll(path: string): Promise<boolean> {
 		try {
+			const fs = await nodeFs();
 			await fs.mkdir(path, { recursive: true });
 			return true;
 		} catch {
 			return false;
 		}
 	}
+}
+
+function basename(path: string): string {
+	const normalized = path.replace(/[/\\]+$/, "");
+	const index = Math.max(
+		normalized.lastIndexOf("/"),
+		normalized.lastIndexOf("\\"),
+	);
+	return index === -1 ? normalized : normalized.slice(index + 1);
+}
+
+let nodeFsPromise: Promise<typeof import("node:fs/promises")> | undefined;
+
+async function nodeFs(): Promise<typeof import("node:fs/promises")> {
+	nodeFsPromise ??= import(/* @vite-ignore */ NODE_FS_PROMISES_MODULE);
+	return nodeFsPromise;
 }
