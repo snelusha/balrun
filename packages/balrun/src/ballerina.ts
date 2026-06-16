@@ -64,7 +64,7 @@ export class Ballerina {
 			} catch (err) {
 				this._bridgePromise = null;
 				throw new Error(
-					`Ballerina: Failed to initialize the WASM bridge: ${err instanceof Error ? err.message : err}`,
+					`[balrun]: failed to initialize the WASM bridge: ${err instanceof Error ? err.message : err}`,
 				);
 			}
 		})();
@@ -76,7 +76,7 @@ export class Ballerina {
 		if (this._fs) return this._fs;
 		if (!supportsNodeFS())
 			throw new Error(
-				"Ballerina requires an `fs` option outside Node-compatible environments.",
+				"[balrun]: `fs` option is required outside Node-compatible environments.",
 			);
 
 		const fs = new NodeFS();
