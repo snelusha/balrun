@@ -1,6 +1,6 @@
 # AGENTS.md
 
-[`@snelusha/balrun`](https://github.com/snelusha/balrun) runs Ballerina from JavaScript/TypeScript by loading `ballerina.wasm`, which is built from the [`ballerina-lang-go`](https://github.com/ballerina-platform/ballerina-lang-go) submodule.
+[`@snelusha/balrun`](https://github.com/snelusha/balrun) runs Ballerina from JavaScript/TypeScript by loading `ballerina.wasm`, which is built from the [`ballerina`](https://github.com/ballerina-nutcracker/ballerina) submodule.
 
 ## Repository structure
 
@@ -13,7 +13,7 @@ Workspaces are declared in the root `package.json` as `apps/*`, `examples/*`, an
 | `examples/memfs`            | `example-memfs`     | In-memory filesystem usage example.       |
 | `examples/vite`             | `example-vite`      | Vite + React browser usage example.       |
 
-`packages/ballerina-wasm/ballerina-lang-go` is an upstream submodule and has its own `AGENTS.md`.
+`packages/ballerina-wasm/ballerina` is an upstream submodule and has its own `AGENTS.md`.
 
 ## Commands
 

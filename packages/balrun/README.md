@@ -134,4 +134,4 @@ Vite handles this automatically: it detects the default WASM URL and emits `ball
 
 ## Acknowledgements
 
-Built on [ballerina-lang-go](https://github.com/ballerina-platform/ballerina-lang-go).
+Built on [ballerina](https://github.com/ballerina-nutcracker/ballerina).
