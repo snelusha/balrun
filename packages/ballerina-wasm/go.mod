@@ -2,7 +2,7 @@ module ballerina-wasm
 
 go 1.26
 
-replace ballerina-lang-go => ./ballerina-lang-go/
+replace ballerina-lang-go => ./ballerina/
 
 require ballerina-lang-go v0.0.0-00010101000000-000000000000
 
