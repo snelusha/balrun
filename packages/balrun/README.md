@@ -36,15 +36,15 @@ Options passed to `run()` override the constructor defaults for that call only.
 import { useBallerina } from "@snelusha/balrun/react";
 
 function RunButton() {
-  const { isReady, error, run } = useBallerina({
-    fs: new SomeFS(), // Required in browser environments
-  });
+	const { isReady, error, run } = useBallerina({
+		fs: new SomeFS(), // Required in browser environments
+	});
 
-  return (
-    <button disabled={!isReady} onClick={() => run("./main.bal")}>
-      {error ? error.message : "Run Ballerina"}
-    </button>
-  );
+	return (
+		<button disabled={!isReady} onClick={() => run("./main.bal")}>
+			{error ? error.message : "Run Ballerina"}
+		</button>
+	);
 }
 ```
 
@@ -75,9 +75,9 @@ import { Ballerina, type StreamWriter } from "@snelusha/balrun";
 
 const buffer: string[] = [];
 const writer: StreamWriter = {
-  write(chunk) {
-    buffer.push(chunk);
-  },
+	write(chunk) {
+		buffer.push(chunk);
+	},
 };
 
 await new Ballerina({ stdout: writer, stderr: writer }).run("./main.bal");
@@ -91,8 +91,8 @@ await new Ballerina({ stdout: writer, stderr: writer }).run("./main.bal");
 import { Ballerina, type FS } from "@snelusha/balrun";
 
 class MemFS implements FS {
-  // When running a single file, only `open` and `stat` are required.
-  // When running a package, `readDir` is also required.
+	// When running a single file, only `open` and `stat` are required.
+	// When running a package, `readDir` is also required.
 }
 
 await new Ballerina({ fs: new MemFS() }).run("main.bal");

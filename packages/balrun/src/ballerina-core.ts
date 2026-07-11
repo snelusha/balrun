@@ -14,9 +14,5 @@ export interface BallerinaRunOptions {
 export type BallerinaRunResult = { error?: string } | null;
 
 export interface BallerinaCore {
-	run(
-		proxy: FS,
-		path: string,
-		options?: BallerinaRunOptions,
-	): Promise<BallerinaRunResult>;
+	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult>;
 }

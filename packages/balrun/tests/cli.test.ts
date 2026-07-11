@@ -27,9 +27,7 @@ describe("CLI", () => {
 	});
 
 	it("runs a Ballerina file", async () => {
-		const result = await runCli([
-			fileURLToPath(new URL("./fixtures/hello.bal", import.meta.url)),
-		]);
+		const result = await runCli([fileURLToPath(new URL("./fixtures/hello.bal", import.meta.url))]);
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toBe("Hello, Ballerina!\n");
@@ -37,9 +35,7 @@ describe("CLI", () => {
 	});
 
 	it("prints runtime errors and exits 1", async () => {
-		const missingPath = fileURLToPath(
-			new URL("./fixtures/does-not-exist.bal", import.meta.url),
-		);
+		const missingPath = fileURLToPath(new URL("./fixtures/does-not-exist.bal", import.meta.url));
 		const result = await runCli([missingPath]);
 
 		expect(result.exitCode).toBe(1);

@@ -1,8 +1,4 @@
-import type {
-	BallerinaCore,
-	BallerinaRunOptions,
-	BallerinaRunResult,
-} from "./ballerina-core";
+import type { BallerinaCore, BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
 import type { FS } from "./fs/core";
 
 const NODE_FS_PROMISES_MODULE = "node:fs/promises";
@@ -19,9 +15,7 @@ export class WasmBridge implements BallerinaCore {
 	private exports: WasmExports = {} as WasmExports;
 	private go: GoRuntime | null = null;
 
-	static async load(
-		source: string | Response | PromiseLike<Response>,
-	): Promise<WasmBridge> {
+	static async load(source: string | Response | PromiseLike<Response>): Promise<WasmBridge> {
 		await import("./wasm_exec");
 		const go = new Go();
 		const instance = await loadWasm(source, go.importObject);
@@ -32,16 +26,9 @@ export class WasmBridge implements BallerinaCore {
 		return bridge;
 	}
 
-	run(
-		proxy: FS,
-		path: string,
-		options?: BallerinaRunOptions,
-	): Promise<BallerinaRunResult> {
-		if (path === "")
-			return Promise.reject(new Error("[balrun]: run path must not be empty."));
-		return this.exports
-			.run(proxy, path, options)
-			.finally(() => this.clearScheduledTimeouts());
+	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
+		if (path === "") return Promise.reject(new Error("[balrun]: run path must not be empty."));
+		return this.exports.run(proxy, path, options).finally(() => this.clearScheduledTimeouts());
 	}
 
 	private clearScheduledTimeouts(): void {
@@ -61,10 +48,7 @@ function loadWasm(
 	importObject: WebAssembly.Imports,
 ): Promise<WebAssembly.Instance> {
 	if (typeof source === "string") {
-		if (source === "")
-			return Promise.reject(
-				new Error("[balrun]: WASM source must not be empty."),
-			);
+		if (source === "") return Promise.reject(new Error("[balrun]: WASM source must not be empty."));
 		if (shouldFetch(source)) return loadRemote(source, importObject);
 		else return loadLocal(source, importObject);
 	} else {
@@ -96,16 +80,11 @@ async function loadFromResponse(
 ): Promise<WebAssembly.Instance> {
 	const response = await source;
 	if (!response.ok) {
-		throw new Error(
-			`[balrun]: failed to load WASM: ${response.status} ${response.statusText}`,
-		);
+		throw new Error(`[balrun]: failed to load WASM: ${response.status} ${response.statusText}`);
 	}
 
 	try {
-		const { instance } = await WebAssembly.instantiateStreaming(
-			response.clone(),
-			importObject,
-		);
+		const { instance } = await WebAssembly.instantiateStreaming(response.clone(), importObject);
 		return instance;
 	} catch {
 		const buffer = await response.arrayBuffer();

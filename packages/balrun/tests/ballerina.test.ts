@@ -3,10 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { Ballerina } from "../src/ballerina.ts";
 import { MemFS } from "./memfs";
 
-import type {
-	BallerinaCore,
-	BallerinaRunOptions,
-} from "../src/ballerina-core.ts";
+import type { BallerinaCore, BallerinaRunOptions } from "../src/ballerina-core.ts";
 import type { BallerinaOptions } from "../src/ballerina.ts";
 import type { FS } from "../src/fs/core.ts";
 
@@ -80,9 +77,7 @@ describe("Ballerina", () => {
 	it("throws when run path is empty", async () => {
 		const { ballerina, core } = createBallerina();
 
-		expect(ballerina.run("")).rejects.toThrow(
-			"[balrun]: run path must not be empty.",
-		);
+		expect(ballerina.run("")).rejects.toThrow("[balrun]: run path must not be empty.");
 		expect(core.calls).toHaveLength(0);
 	});
 

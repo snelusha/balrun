@@ -5,9 +5,7 @@ import { Ballerina } from "../dist/index.mjs";
 const path = process.argv[2];
 
 if (!path) {
-	process.stderr.write(
-		"usage: balrun [<source-file.bal> | <package-dir> | .]\n",
-	);
+	process.stderr.write("usage: balrun [<source-file.bal> | <package-dir> | .]\n");
 	process.exit(1);
 }
 

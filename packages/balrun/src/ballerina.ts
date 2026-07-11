@@ -1,11 +1,7 @@
 import { NodeFS } from "./fs/node";
 
 import type { FS } from "./fs/core";
-import type {
-	BallerinaCore,
-	BallerinaRunOptions,
-	BallerinaRunResult,
-} from "./ballerina-core";
+import type { BallerinaCore, BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
 
 const DEFAULT_WASM_PATH = new URL("./ballerina.wasm", import.meta.url).href;
 
@@ -75,19 +71,14 @@ export class Ballerina {
 	private async fs(): Promise<FS> {
 		if (this._fs) return this._fs;
 		if (!supportsNodeFS())
-			throw new Error(
-				"[balrun]: `fs` option is required outside Node-compatible environments.",
-			);
+			throw new Error("[balrun]: `fs` option is required outside Node-compatible environments.");
 
 		const fs = new NodeFS();
 		this._fs = fs;
 		return fs;
 	}
 
-	async run(
-		path: string,
-		options?: BallerinaRunOptions,
-	): Promise<BallerinaRunResult> {
+	async run(path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
 		if (path === "") throw new Error("[balrun]: run path must not be empty.");
 		const bridge = await this.bridge();
 		return bridge.run(await this.fs(), path, {

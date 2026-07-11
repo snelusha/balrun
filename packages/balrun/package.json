@@ -4,13 +4,16 @@
 	"description": "Run Ballerina anywhere!",
 	"keywords": [
 		"ballerina",
+		"cli",
 		"interpreter",
 		"runtime",
-		"wasm",
-		"webassembly",
 		"typescript",
-		"cli"
+		"wasm",
+		"webassembly"
 	],
+	"bugs": {
+		"url": "https://github.com/snelusha/balrun/issues"
+	},
 	"license": "MIT",
 	"author": {
 		"name": "Sithija Nelusha Silva",
@@ -22,9 +25,13 @@
 		"url": "https://github.com/snelusha/balrun.git",
 		"directory": "packages/balrun"
 	},
-	"bugs": {
-		"url": "https://github.com/snelusha/balrun/issues"
+	"bin": {
+		"balrun": "./bin/cli.mjs"
 	},
+	"files": [
+		"bin",
+		"dist"
+	],
 	"type": "module",
 	"main": "./dist/index.mjs",
 	"module": "./dist/index.mjs",
@@ -45,13 +52,6 @@
 			"import": "./dist/react.mjs",
 			"default": "./dist/react.mjs"
 		}
-	},
-	"files": [
-		"bin",
-		"dist"
-	],
-	"bin": {
-		"balrun": "./bin/cli.mjs"
 	},
 	"scripts": {
 		"build": "tsdown && cp ../ballerina-wasm/dist/ballerina.wasm dist/ballerina.wasm",

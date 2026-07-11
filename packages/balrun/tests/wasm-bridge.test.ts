@@ -51,22 +51,16 @@ describe("WasmBridge", () => {
 
 		it("throws on non-OK Response", async () => {
 			expect(
-				WasmBridge.load(
-					new Response("missing", { status: 404, statusText: "Not Found" }),
-				),
+				WasmBridge.load(new Response("missing", { status: 404, statusText: "Not Found" })),
 			).rejects.toThrow("[balrun]: failed to load WASM: 404 Not Found");
 		});
 
 		it("throws on invalid URL", async () => {
-			expect(
-				WasmBridge.load("https://localhost:6969/somewhere.wasm"),
-			).rejects.toThrow();
+			expect(WasmBridge.load("https://localhost:6969/somewhere.wasm")).rejects.toThrow();
 		});
 
 		it("throws when source is empty", async () => {
-			expect(WasmBridge.load("")).rejects.toThrow(
-				"[balrun]: WASM source must not be empty.",
-			);
+			expect(WasmBridge.load("")).rejects.toThrow("[balrun]: WASM source must not be empty.");
 		});
 
 		it("throws on invalid local path", async () => {
@@ -83,9 +77,7 @@ describe("WasmBridge", () => {
 
 		it("runs a Ballerina file and returns the result", async () => {
 			const fs = new MemFS({
-				"main.bal": await Bun.file(
-					new URL("./fixtures/hello.bal", import.meta.url),
-				).text(),
+				"main.bal": await Bun.file(new URL("./fixtures/hello.bal", import.meta.url)).text(),
 			});
 			const stdout: string[] = [];
 			const result = await bridge.run(fs, "main.bal", {

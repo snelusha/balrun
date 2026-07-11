@@ -6,12 +6,12 @@
 
 Workspaces are declared in the root `package.json` as `apps/*`, `examples/*`, and `packages/*`.
 
-| Path                        | Package             | Role                                      |
-| --------------------------- | ------------------- | ----------------------------------------- |
-| `packages/balrun`           | `@snelusha/balrun`  | TypeScript library, React hook, and CLI.  |
-| `packages/ballerina-wasm`   | `ballerina-wasm`    | Builds `ballerina.wasm` with Go.          |
-| `examples/memfs`            | `example-memfs`     | In-memory filesystem usage example.       |
-| `examples/vite`             | `example-vite`      | Vite + React browser usage example.       |
+| Path                      | Package            | Role                                     |
+| ------------------------- | ------------------ | ---------------------------------------- |
+| `packages/balrun`         | `@snelusha/balrun` | TypeScript library, React hook, and CLI. |
+| `packages/ballerina-wasm` | `ballerina-wasm`   | Builds `ballerina.wasm` with Go.         |
+| `examples/memfs`          | `example-memfs`    | In-memory filesystem usage example.      |
+| `examples/vite`           | `example-vite`     | Vite + React browser usage example.      |
 
 `packages/ballerina-wasm/ballerina` is an upstream submodule and has its own `AGENTS.md`.
 
@@ -24,12 +24,12 @@ Useful root scripts:
 - `bun install --frozen-lockfile`
 - `bun run build` — Turbo build across workspaces
 - `bun run test` — Turbo test across workspaces
-- `bun run lint` / `bun run lint:fix` — Biome check (and auto-fix)
-- `bun run format` — Biome format (write)
+- `bun run lint` / `bun run lint:fix` — Oxlint (and safe auto-fixes)
+- `bun run format` / `bun run format:check` — Oxfmt (write / verify formatting)
 
 ## Conventions
 
-- Biome is the formatter/linter; keep tab indentation and double quotes.
+- Oxlint and Oxfmt are the primary linter and formatter; keep tab indentation and double quotes.
 - Avoid editing generated `dist/` files unless explicitly required.
 
 ## Task completion

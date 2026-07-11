@@ -95,10 +95,7 @@ export class NodeFS implements FS {
 
 function basename(path: string): string {
 	const normalized = path.replace(/[/\\]+$/, "");
-	const index = Math.max(
-		normalized.lastIndexOf("/"),
-		normalized.lastIndexOf("\\"),
-	);
+	const index = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
 	return index === -1 ? normalized : normalized.slice(index + 1);
 }
 

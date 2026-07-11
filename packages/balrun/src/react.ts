@@ -32,9 +32,7 @@ export function useBallerina(options: BallerinaOptions = {}) {
 			.catch(
 				(err) =>
 					!cancelled &&
-					setError(
-						err instanceof Error ? err : new Error(`[balrun]: ${String(err)}`),
-					),
+					setError(err instanceof Error ? err : new Error(`[balrun]: ${String(err)}`)),
 			);
 
 		return () => {
@@ -44,14 +42,9 @@ export function useBallerina(options: BallerinaOptions = {}) {
 	}, [opts]);
 
 	const run = useCallback(
-		(
-			path: string,
-			options?: BallerinaRunOptions,
-		): Promise<BallerinaRunResult> => {
+		(path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> => {
 			if (!ballerinaRef.current || !isReady)
-				return Promise.reject(
-					new Error("[balrun]: runtime instance is not initialized."),
-				);
+				return Promise.reject(new Error("[balrun]: runtime instance is not initialized."));
 			return ballerinaRef.current.run(path, options);
 		},
 		[isReady],

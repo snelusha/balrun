@@ -15,9 +15,7 @@ class MemFS implements FS {
 
 	async open(path: string): Promise<OpenResult | null> {
 		const content = this.files.get(path);
-		return content == null
-			? null
-			: { content, size: content.length, modTime: 0, isDir: false };
+		return content == null ? null : { content, size: content.length, modTime: 0, isDir: false };
 	}
 
 	async stat(path: string): Promise<StatResult | null> {
@@ -25,9 +23,7 @@ class MemFS implements FS {
 			return { name: ".", size: 0, modTime: 0, isDir: true };
 		}
 		const content = this.files.get(path);
-		return content == null
-			? null
-			: { name: path, size: content.length, modTime: 0, isDir: false };
+		return content == null ? null : { name: path, size: content.length, modTime: 0, isDir: false };
 	}
 
 	async readDir(path: string): Promise<DirEntry[] | null> {
