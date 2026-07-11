@@ -1,27 +1,27 @@
 {
-	"name": "example-vite",
-	"version": "0.0.0",
-	"private": true,
-	"type": "module",
-	"scripts": {
-		"dev": "vite",
-		"build": "tsc -b && vite build",
-		"preview": "vite preview"
-	},
-	"dependencies": {
-		"@snelusha/balrun": "workspace:*",
-		"react": "^19.2.6",
-		"react-dom": "^19.2.6"
-	},
-	"devDependencies": {
-		"@tailwindcss/vite": "^4.3.0",
-		"@types/node": "^24.12.3",
-		"@types/react": "^19.2.14",
-		"@types/react-dom": "^19.2.3",
-		"@vitejs/plugin-react": "^6.0.1",
-		"globals": "^17.6.0",
-		"tailwindcss": "^4.3.0",
-		"typescript": "~6.0.2",
-		"vite": "^8.0.12"
-	}
+  "name": "example-vite",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@snelusha/balrun": "workspace:*",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^24.12.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "globals": "^17.6.0",
+    "tailwindcss": "^4.3.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12"
+  }
 }

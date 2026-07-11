@@ -1,7 +1,0 @@
-{
-	"root": false,
-	"extends": "//",
-	"files": {
-		"includes": ["**", "!!dist/", "!src/wasm_exec.js"]
-	}
-}

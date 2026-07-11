@@ -1,15 +1,15 @@
 {
-	"name": "example-memfs",
-	"private": true,
-	"type": "module",
-	"module": "index.ts",
-	"dependencies": {
-		"@snelusha/balrun": "workspace:*"
-	},
-	"devDependencies": {
-		"@types/bun": "1.3.13"
-	},
-	"peerDependencies": {
-		"typescript": "^6.0.3"
-	}
+  "name": "example-memfs",
+  "private": true,
+  "type": "module",
+  "module": "index.ts",
+  "dependencies": {
+    "@snelusha/balrun": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.13"
+  },
+  "peerDependencies": {
+    "typescript": "^6.0.3"
+  }
 }

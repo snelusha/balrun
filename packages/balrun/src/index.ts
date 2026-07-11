@@ -4,8 +4,8 @@ export { WasmBridge } from "./wasm-bridge";
 export type { FS, OpenResult, StatResult, DirEntry } from "./fs/core";
 export type { BallerinaOptions } from "./ballerina";
 export type {
-	BallerinaCore,
-	BallerinaRunOptions,
-	BallerinaRunResult,
-	StreamWriter,
+  BallerinaCore,
+  BallerinaRunOptions,
+  BallerinaRunResult,
+  StreamWriter,
 } from "./ballerina-core";

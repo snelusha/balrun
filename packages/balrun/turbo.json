@@ -1,21 +1,21 @@
 {
-	"$schema": "https://turbo.build/schema.json",
-	"extends": ["//"],
-	"tasks": {
-		"build": {
-			"dependsOn": ["^build", "ballerina-wasm#build"],
-			"inputs": [
-				"src/**",
-				"tsdown.config.ts",
-				"package.json",
-				"../ballerina-wasm/dist/ballerina.wasm"
-			],
-			"outputs": ["dist/**"]
-		},
-		"test": {
-			"dependsOn": ["build"],
-			"inputs": ["tests/**", "bin/**", "package.json"],
-			"outputs": []
-		}
-	}
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "ballerina-wasm#build"],
+      "inputs": [
+        "src/**",
+        "tsdown.config.ts",
+        "package.json",
+        "../ballerina-wasm/dist/ballerina.wasm"
+      ],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "dependsOn": ["build"],
+      "inputs": ["tests/**", "bin/**", "package.json"],
+      "outputs": []
+    }
+  }
 }
