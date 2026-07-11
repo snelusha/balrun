@@ -1,4 +1,4 @@
 {
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": ["packages/ballerina-wasm/ballerina/**", "packages/balrun/src/wasm_exec.js"]
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"ignorePatterns": ["packages/ballerina-wasm/ballerina/**", "packages/balrun/src/wasm_exec.js"]
 }

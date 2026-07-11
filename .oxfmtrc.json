@@ -1,4 +1,5 @@
 {
-  "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["packages/ballerina-wasm/ballerina/**", "packages/balrun/src/wasm_exec.js"]
+	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"useTabs": true,
+	"ignorePatterns": ["packages/ballerina-wasm/ballerina/**", "packages/balrun/src/wasm_exec.js"]
 }
