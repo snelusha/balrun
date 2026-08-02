@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 
-import { useBallerina } from "@snelusha/balrun/react";
+import { BallerinaProvider, useBallerina } from "@snelusha/balrun/react";
 
 import type { DirEntry, FS, OpenResult, StatResult } from "@snelusha/balrun";
 
@@ -67,12 +67,27 @@ export default function App() {
 		[],
 	);
 
-	const { run, isReady } = useBallerina({
-		fs,
-		stdout: outputWriter,
-		stderr: outputWriter,
-		colors: false,
-	});
+	return (
+		<BallerinaProvider fs={fs} stdout={outputWriter} stderr={outputWriter} colors={false}>
+			<RunEditor
+				code={code}
+				output={output}
+				updateCode={updateCode}
+				clearOutput={() => setOutput("")}
+			/>
+		</BallerinaProvider>
+	);
+}
+
+interface RunEditorProps {
+	code: string;
+	output: string;
+	updateCode: (value: string) => void;
+	clearOutput: () => void;
+}
+
+function RunEditor({ code, output, updateCode, clearOutput }: RunEditorProps) {
+	const { run, isReady } = useBallerina();
 
 	return (
 		<main className="min-h-dvh grid place-items-center p-4">
@@ -83,7 +98,7 @@ export default function App() {
 						className="border border-zinc-300 px-4 py-2 disabled:opacity-50"
 						disabled={!isReady}
 						onClick={() => {
-							setOutput("");
+							clearOutput();
 							void run("main.bal");
 						}}
 					>
