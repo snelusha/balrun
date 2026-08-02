@@ -1,12 +1,16 @@
 import { createElement } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, test } from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 
 import { BallerinaProvider, useBallerina } from "../src/react";
+
 import { WasmBridge } from "../src/wasm-bridge";
 import { MemFS } from "./memfs";
+
+import type { BallerinaProviderProps } from "../src/react";
 
 const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
 
@@ -19,60 +23,66 @@ Object.assign(globalThis, {
 	IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-test("BallerinaProvider initializes and runs code through the shared runtime", async () => {
-	const fs = new MemFS({
-		"main.bal":
-			'import ballerina/io;\n\npublic function main() { io:println("Hello, Ballerina!"); }',
-	});
-	const stdout: string[] = [];
-	const core = await WasmBridge.load(WASM_PATH);
-	let ballerina: ReturnType<typeof useBallerina> | null = null;
+async function renderProvider(options: Omit<BallerinaProviderProps, "children">) {
+	const runtime: { current: ReturnType<typeof useBallerina> | null } = { current: null };
 	const container = document.createElement("div");
 	const root = createRoot(container);
 
 	function Consumer() {
-		ballerina = useBallerina();
+		const ballerina = useBallerina();
+		runtime.current = ballerina;
 		return createElement("output", null, `${ballerina.isReady}:${ballerina.error}`);
 	}
 
 	await act(async () => {
-		root.render(
-			createElement(
-				BallerinaProvider,
-				{ core, fs, colors: false, stdout: { write: (chunk) => stdout.push(chunk) } },
-				createElement(Consumer),
-			),
-		);
+		root.render(createElement(BallerinaProvider, options, createElement(Consumer)));
 	});
 
-	expect(container.innerHTML).toBe("<output>true:null</output>");
-	await expect(ballerina?.run("main.bal")).resolves.toBeNull();
-	expect(stdout.join("")).toBe("Hello, Ballerina!\n");
+	return { container, root, runtime };
+}
 
-	await act(async () => root.unmount());
-});
-
-test("useBallerina requires a BallerinaProvider", async () => {
-	const container = document.createElement("div");
-	const root = createRoot(container);
-
-	function Consumer() {
-		useBallerina();
-		return null;
-	}
-
-	let error: unknown;
-	try {
-		await act(async () => {
-			root.render(createElement(Consumer));
+describe("React", () => {
+	test("BallerinaProvider runs Ballerina code", async () => {
+		const fs = new MemFS({
+			"main.bal":
+				'import ballerina/io;\n\npublic function main() { io:println("Hello, Ballerina!"); }',
 		});
-	} catch (err) {
-		error = err;
-	}
+		const stdout: string[] = [];
+		const { container, root, runtime } = await renderProvider({
+			core: await WasmBridge.load(WASM_PATH),
+			fs,
+			colors: false,
+			stdout: { write: (chunk) => stdout.push(chunk) },
+		});
 
-	expect(error).toBeInstanceOf(Error);
-	expect(error).toHaveProperty(
-		"message",
-		"[balrun]: useBallerina must be used within a BallerinaProvider.",
-	);
+		expect(container.innerHTML).toBe("<output>true:null</output>");
+		expect(runtime.current).not.toBeNull();
+		expect(runtime.current!.run("main.bal")).resolves.toBeNull();
+		expect(stdout.join("")).toBe("Hello, Ballerina!\n");
+
+		await act(async () => root.unmount());
+	});
+
+	test("BallerinaProvider rejects invalid run paths", async () => {
+		const { root, runtime } = await renderProvider({
+			core: await WasmBridge.load(WASM_PATH),
+			fs: new MemFS({}),
+		});
+
+		expect(runtime.current).not.toBeNull();
+		expect(runtime.current!.run("")).rejects.toThrow("[balrun]: run path must not be empty.");
+
+		await act(async () => root.unmount());
+	});
+
+	test("useBallerina requires a BallerinaProvider", () => {
+		function Consumer() {
+			useBallerina();
+			return null;
+		}
+
+		expect(() => renderToStaticMarkup(createElement(Consumer))).toThrow(
+			"[balrun]: useBallerina must be used within a BallerinaProvider.",
+		);
+	});
 });

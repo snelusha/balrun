@@ -35,9 +35,11 @@ Options passed to `run()` override the constructor defaults for that call only.
 ```tsx
 import { BallerinaProvider, useBallerina } from "@snelusha/balrun/react";
 
+const fs = new SomeFS();
+
 function App() {
 	return (
-		<BallerinaProvider fs={new SomeFS()}>
+		<BallerinaProvider fs={fs}>
 			<RunButton />
 		</BallerinaProvider>
 	);
