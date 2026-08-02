@@ -33,12 +33,18 @@ Options passed to `run()` override the constructor defaults for that call only.
 ## React
 
 ```tsx
-import { useBallerina } from "@snelusha/balrun/react";
+import { BallerinaProvider, useBallerina } from "@snelusha/balrun/react";
+
+function App() {
+	return (
+		<BallerinaProvider fs={new SomeFS()}>
+			<RunButton />
+		</BallerinaProvider>
+	);
+}
 
 function RunButton() {
-	const { isReady, error, run } = useBallerina({
-		fs: new SomeFS(), // Required in browser environments
-	});
+	const { isReady, error, run } = useBallerina();
 
 	return (
 		<button disabled={!isReady} onClick={() => run("./main.bal")}>
@@ -48,7 +54,7 @@ function RunButton() {
 }
 ```
 
-`useBallerina()` accepts the same options as `Ballerina` and initializes the runtime.
+`BallerinaProvider` accepts the same options as `Ballerina` and initializes one shared runtime for its descendants. `useBallerina()` must be called within a provider. In browser environments, provide an `fs` implementation.
 
 See [`examples/vite`](https://github.com/snelusha/balrun/tree/main/examples/vite) for a Vite + React browser example.
 
