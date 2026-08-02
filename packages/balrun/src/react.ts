@@ -1,11 +1,34 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	createContext,
+	createElement,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 
 import { Ballerina } from "./ballerina";
+
+import type { ReactNode } from "react";
 
 import type { BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
 import type { BallerinaOptions } from "./ballerina";
 
-export function useBallerina(options: BallerinaOptions = {}) {
+export interface BallerinaContextValue {
+	isReady: boolean;
+	error: Error | null;
+	run: (path: string, options?: BallerinaRunOptions) => Promise<BallerinaRunResult>;
+}
+
+const BallerinaContext = createContext<BallerinaContextValue | null>(null);
+
+export interface BallerinaProviderProps extends BallerinaOptions {
+	children?: ReactNode;
+}
+
+export function BallerinaProvider({ children, ...options }: BallerinaProviderProps) {
 	const ballerinaRef = useRef<Ballerina | null>(null);
 
 	const [isReady, setIsReady] = useState(false);
@@ -50,7 +73,13 @@ export function useBallerina(options: BallerinaOptions = {}) {
 		[isReady],
 	);
 
-	return { isReady, error, run };
+	return createElement(BallerinaContext.Provider, { value: { isReady, error, run } }, children);
 }
 
-export type UseBallerinaResult = ReturnType<typeof useBallerina>;
+export function useBallerina(): BallerinaContextValue {
+	const value = useContext(BallerinaContext);
+	if (!value) throw new Error("[balrun]: useBallerina must be used within a BallerinaProvider.");
+	return value;
+}
+
+export type UseBallerinaResult = BallerinaContextValue;
