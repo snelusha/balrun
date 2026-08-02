@@ -3,16 +3,26 @@ import { describe, expect, it } from "bun:test";
 import { Ballerina } from "../src/ballerina.ts";
 import { MemFS } from "./memfs";
 
-import type { BallerinaCore, BallerinaRunOptions } from "../src/ballerina-core.ts";
+import type {
+	BallerinaCore,
+	BallerinaRunOptions,
+	BallerinaStopMode,
+} from "../src/ballerina-core.ts";
 import type { BallerinaOptions } from "../src/ballerina.ts";
 import type { FS } from "../src/fs/core.ts";
 
 class SpyCore implements BallerinaCore {
 	calls: Array<{ fs: FS; path: string; options?: BallerinaRunOptions }> = [];
+	stops: Array<BallerinaStopMode | undefined> = [];
 
 	async run(fs: FS, path: string, options?: BallerinaRunOptions) {
 		this.calls.push({ fs, path, options });
 		return null;
+	}
+
+	async stop(mode?: BallerinaStopMode) {
+		this.stops.push(mode);
+		return true;
 	}
 }
 
@@ -72,6 +82,14 @@ describe("Ballerina", () => {
 		await ballerina.run("main.bal");
 
 		expect(core.calls).toHaveLength(1);
+	});
+
+	it("forwards stop modes to the core", async () => {
+		const { ballerina, core } = createBallerina();
+
+		expect(await ballerina.stop()).toBe(true);
+		expect(await ballerina.stop("immediate")).toBe(true);
+		expect(core.stops).toEqual(["graceful", "immediate"]);
 	});
 
 	it("throws when run path is empty", async () => {

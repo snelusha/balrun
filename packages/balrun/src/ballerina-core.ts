@@ -13,6 +13,9 @@ export interface BallerinaRunOptions {
 
 export type BallerinaRunResult = { error?: string } | null;
 
+export type BallerinaStopMode = "graceful" | "immediate";
+
 export interface BallerinaCore {
 	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult>;
+	stop(mode?: BallerinaStopMode): Promise<boolean>;
 }

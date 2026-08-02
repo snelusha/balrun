@@ -75,6 +75,40 @@ describe("WasmBridge", () => {
 			);
 		});
 
+		it("returns false when stopping without an active run", async () => {
+			expect(await bridge.stop()).toBe(false);
+		});
+
+		it("gracefully stops an active listener", async () => {
+			const fs = new MemFS({
+				"main.bal": await Bun.file(new URL("./fixtures/listener.bal", import.meta.url)).text(),
+			});
+			const stdout: string[] = [];
+			const running = bridge.run(fs, "main.bal", {
+				stdout: { write: (chunk) => stdout.push(chunk) },
+			});
+
+			await waitFor(() => stdout.join("").includes("Listener started."));
+			expect(await bridge.stop("graceful")).toBe(true);
+			await running;
+			expect(stdout.join("")).toContain("Graceful stop initiated.");
+		});
+
+		it("immediately stops an active listener", async () => {
+			const fs = new MemFS({
+				"main.bal": await Bun.file(new URL("./fixtures/listener.bal", import.meta.url)).text(),
+			});
+			const stdout: string[] = [];
+			const running = bridge.run(fs, "main.bal", {
+				stdout: { write: (chunk) => stdout.push(chunk) },
+			});
+
+			await waitFor(() => stdout.join("").includes("Listener started."));
+			expect(await bridge.stop("immediate")).toBe(true);
+			await running;
+			expect(stdout.join("")).toContain("Immediate stop initiated.");
+		});
+
 		it("runs a Ballerina file and returns the result", async () => {
 			const fs = new MemFS({
 				"main.bal": await Bun.file(new URL("./fixtures/hello.bal", import.meta.url)).text(),
@@ -88,3 +122,11 @@ describe("WasmBridge", () => {
 		});
 	});
 });
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+	for (let i = 0; i < 100; i++) {
+		if (predicate()) return;
+		await Bun.sleep(10);
+	}
+	throw new Error("timed out waiting for listener to start");
+}

@@ -1,3 +1,19 @@
+// Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
 package main
 
 import (
@@ -10,40 +26,24 @@ import (
 	"strings"
 )
 
-type termStyle struct {
-	red    func(string) string
-	yellow func(string) string
-	cyan   func(string) string
-	bold   func(string) string
+type outputStyle struct {
+	reset, red, yellow, cyan, bold string
 }
 
-func (s termStyle) severityColor(severity diagnostics.DiagnosticSeverity) func(string) string {
+func (s outputStyle) severityColor(severity diagnostics.DiagnosticSeverity) string {
 	if severity == diagnostics.Warning {
 		return s.yellow
 	}
 	return s.red
 }
 
-func termStyleFor(noColors bool) termStyle {
-	if noColors {
-		identity := func(s string) string { return s }
-		return termStyle{
-			red:    identity,
-			yellow: identity,
-			cyan:   identity,
-			bold:   identity,
-		}
-	}
-	colorFn := func(code string) func(string) string {
-		return func(s string) string {
-			return "\033[" + code + "m" + s + "\033[0m"
-		}
-	}
-	return termStyle{
-		red:    colorFn("31"),
-		yellow: colorFn("33"),
-		cyan:   colorFn("36"),
-		bold:   colorFn("1"),
+func outputStyleFor() outputStyle {
+	return outputStyle{
+		reset:  "\033[0m",
+		red:    "\033[31m",
+		yellow: "\033[33m",
+		cyan:   "\033[36m",
+		bold:   "\033[1m",
 	}
 }
 
@@ -71,14 +71,14 @@ func buildDiagnosticLocation(filePath string, startLine, startCol, endLine, endC
 	}
 }
 
-func printDiagnostics(fsys fs.FS, path string, w io.Writer, diagResult projects.DiagnosticResult, de *diagnostics.DiagnosticEnv, noColors bool) {
+func printDiagnostics(fsys fs.FS, path string, w io.Writer, diagResult projects.DiagnosticResult, de *diagnostics.DiagnosticEnv) {
 	for _, d := range diagResult.Diagnostics() {
-		printDiagnostic(fsys, path, w, d, de, noColors)
+		printDiagnostic(fsys, path, w, d, de)
 	}
 }
 
-func printDiagnostic(fsys fs.FS, path string, w io.Writer, d diagnostics.Diagnostic, de *diagnostics.DiagnosticEnv, noColors bool) {
-	s := termStyleFor(noColors)
+func printDiagnostic(fsys fs.FS, path string, w io.Writer, d diagnostics.Diagnostic, de *diagnostics.DiagnosticEnv) {
+	s := outputStyleFor()
 	printDiagnosticHeader(w, s, d)
 
 	location := d.Location()
@@ -88,7 +88,7 @@ func printDiagnostic(fsys fs.FS, path string, w io.Writer, d diagnostics.Diagnos
 	}
 
 	if !diagnostics.LocationHasSource(location) {
-		_, _ = fmt.Fprintf(w, "%s %s\n\n", s.cyan("-->"), de.FileName(location))
+		_, _ = fmt.Fprintf(w, "  %s-->%s %s\n\n", s.cyan, s.reset, de.FileName(location))
 		return
 	}
 
@@ -102,26 +102,31 @@ func printDiagnostic(fsys fs.FS, path string, w io.Writer, d diagnostics.Diagnos
 	fmt.Fprintln(w)
 }
 
-func printDiagnosticHeader(w io.Writer, s termStyle, d diagnostics.Diagnostic) {
+func printDiagnosticHeader(w io.Writer, s outputStyle, d diagnostics.Diagnostic) {
 	info := d.DiagnosticInfo()
 	codeStr := ""
 	if c := info.Code(); c != "" {
 		codeStr = fmt.Sprintf("[%s]", c)
 	}
-	severityStr := s.bold(s.severityColor(info.Severity())(strings.ToLower(info.Severity().String()) + codeStr))
-	fmt.Fprintf(w, "%s: %s\n", severityStr, s.bold(d.Message()))
+	fmt.Fprintf(w, "%s%s%s%s%s: %s%s%s\n",
+		s.bold, s.severityColor(info.Severity()), strings.ToLower(info.Severity().String()), codeStr, s.reset,
+		s.bold, d.Message(), s.reset,
+	)
 }
 
-func printDiagnosticLocation(w io.Writer, s termStyle, loc diagnosticLocation) {
-	fmt.Fprintf(w, "%*s%s %s:%d:%d\n",
-		loc.numWidth, "", s.cyan("-->"), loc.filePath, loc.startLine+1, loc.startCol+1,
+func printDiagnosticLocation(w io.Writer, s outputStyle, loc diagnosticLocation) {
+	fmt.Fprintf(w, "%*s%s-->%s %s:%d:%d\n",
+		loc.numWidth, "", s.cyan, s.reset, loc.filePath, loc.startLine+1, loc.startCol+1,
 	)
 	if loc.filePath != "" {
-		fmt.Fprintf(w, "%*s %s\n", loc.numWidth, "", s.cyan("|"))
+		fmt.Fprintf(w, "%*s %s|%s\n", loc.numWidth, "", s.cyan, s.reset)
 	}
 }
 
 func snippetSourcePath(fsys fs.FS, projectOrFilePath, diagFile string) string {
+	if diagFile == "" || strings.HasPrefix(diagFile, "/") {
+		return diagFile
+	}
 	if projectOrFilePath == "" {
 		return diagFile
 	}
@@ -132,10 +137,10 @@ func snippetSourcePath(fsys fs.FS, projectOrFilePath, diagFile string) string {
 	return path.Join(projectOrFilePath, diagFile)
 }
 
-func printSourceSnippet(w io.Writer, s termStyle, loc diagnosticLocation, fsys fs.FS, severityColor func(string) string, path string) {
+func printSourceSnippet(w io.Writer, s outputStyle, loc diagnosticLocation, fsys fs.FS, severityColor string, path string) {
 	content, err := fs.ReadFile(fsys, snippetSourcePath(fsys, path, loc.filePath))
 	if err != nil {
-		fmt.Fprintf(w, "%*s %s %s\n", loc.numWidth, "", s.cyan("|"), severityColor(fmt.Sprintf("Could not read source file: %v", err)))
+		fmt.Fprintf(w, "%*s %s|%s %sCould not read source file: %v%s\n", loc.numWidth, "", s.cyan, s.reset, severityColor, err, s.reset)
 		return
 	}
 	lines := strings.Split(string(content), "\n")
@@ -168,9 +173,9 @@ func printSourceSnippet(w io.Writer, s termStyle, loc diagnosticLocation, fsys f
 		var highlightLen int
 		startCol, _, highlightLen = computeTrimmedCaretSpan(lineContent, startCol, endCol)
 
-		fmt.Fprintf(w, "%*s %s\n", loc.numWidth, s.cyan(lineNumStr), s.cyan("|")+" "+lineContent)
+		fmt.Fprintf(w, "%s%*s | %s%s\n", s.cyan, loc.numWidth, lineNumStr, s.reset, lineContent)
 		pointer := buildPointer(lineContent, startCol, highlightLen)
-		fmt.Fprintf(w, "%*s %s %s\n", loc.numWidth, "", s.cyan("|"), severityColor(pointer))
+		fmt.Fprintf(w, "%*s %s| %s%s%s\n", loc.numWidth, "", s.cyan, severityColor, pointer, s.reset)
 	}
 }
 

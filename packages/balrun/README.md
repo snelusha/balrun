@@ -26,6 +26,9 @@ const ballerina = new Ballerina({ colors: false });
 
 // Returns null on success, or { error: "..." } on failure
 const result = await ballerina.run("./main.bal", { colors: true });
+
+// Stop a running listener. Returns false when no run is active.
+await ballerina.stop("graceful");
 ```
 
 Options passed to `run()` override the constructor defaults for that call only.
@@ -46,12 +49,17 @@ function App() {
 }
 
 function RunButton() {
-	const { isReady, error, run } = useBallerina();
+	const { isReady, isRunning, error, run, stop } = useBallerina();
 
 	return (
-		<button disabled={!isReady} onClick={() => run("./main.bal")}>
-			{error ? error.message : "Run Ballerina"}
-		</button>
+		<>
+			<button disabled={!isReady || isRunning} onClick={() => run("./main.bal")}>
+				{error ? error.message : "Run Ballerina"}
+			</button>
+			<button disabled={!isRunning} onClick={() => stop("graceful")}>
+				Stop
+			</button>
+		</>
 	);
 }
 ```
@@ -90,6 +98,12 @@ const writer: StreamWriter = {
 
 await new Ballerina({ stdout: writer, stderr: writer }).run("./main.bal");
 ```
+
+### `stop(mode)`
+
+Stops the active Ballerina listener. `"graceful"` (the default) invokes listener graceful-stop hooks; `"immediate"` invokes immediate-stop hooks. It resolves to `false` when no run is active.
+
+The CLI maps the first `SIGINT` or `SIGTERM` to graceful stop and a subsequent signal to immediate stop. Node.js and Bun library consumers can implement their own signal policy by calling `ballerina.stop()` from their signal handlers.
 
 ### `fs`
 

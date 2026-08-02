@@ -13,13 +13,15 @@ import { Ballerina } from "./ballerina";
 
 import type { ReactNode } from "react";
 
-import type { BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
+import type { BallerinaRunOptions, BallerinaRunResult, BallerinaStopMode } from "./ballerina-core";
 import type { BallerinaOptions } from "./ballerina";
 
 export interface BallerinaContextValue {
 	isReady: boolean;
+	isRunning: boolean;
 	error: Error | null;
 	run: (path: string, options?: BallerinaRunOptions) => Promise<BallerinaRunResult>;
+	stop: (mode?: BallerinaStopMode) => Promise<boolean>;
 }
 
 const BallerinaContext = createContext<BallerinaContextValue | null>(null);
@@ -32,6 +34,7 @@ export function BallerinaProvider({ children, ...options }: BallerinaProviderPro
 	const ballerinaRef = useRef<Ballerina | null>(null);
 
 	const [isReady, setIsReady] = useState(false);
+	const [isRunning, setIsRunning] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
 
 	const { fs, core, wasmSource, colors, stdout, stderr } = options;
@@ -47,6 +50,7 @@ export function BallerinaProvider({ children, ...options }: BallerinaProviderPro
 
 		ballerinaRef.current = ballerina;
 		setIsReady(false);
+		setIsRunning(false);
 		setError(null);
 
 		ballerina
@@ -65,15 +69,33 @@ export function BallerinaProvider({ children, ...options }: BallerinaProviderPro
 	}, [opts]);
 
 	const run = useCallback(
-		(path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> => {
+		async (path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> => {
 			if (!ballerinaRef.current || !isReady)
-				return Promise.reject(new Error("[balrun]: runtime instance is not initialized."));
-			return ballerinaRef.current.run(path, options);
+				throw new Error("[balrun]: runtime instance is not initialized.");
+			setIsRunning(true);
+			try {
+				return await ballerinaRef.current.run(path, options);
+			} finally {
+				setIsRunning(false);
+			}
 		},
 		[isReady],
 	);
 
-	return createElement(BallerinaContext.Provider, { value: { isReady, error, run } }, children);
+	const stop = useCallback(
+		(mode?: BallerinaStopMode): Promise<boolean> => {
+			if (!ballerinaRef.current || !isReady)
+				return Promise.reject(new Error("[balrun]: runtime instance is not initialized."));
+			return ballerinaRef.current.stop(mode);
+		},
+		[isReady],
+	);
+
+	return createElement(
+		BallerinaContext.Provider,
+		{ value: { isReady, isRunning, error, run, stop } },
+		children,
+	);
 }
 
 export function useBallerina(): BallerinaContextValue {

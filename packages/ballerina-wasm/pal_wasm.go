@@ -2,184 +2,139 @@ package main
 
 import (
 	"ballerina-lang-go/platform/pal"
-	"fmt"
+	"errors"
 	"io"
-	"strings"
-	"syscall/js"
+	"io/fs"
+	"maps"
+	"path"
+	"sync"
 	"time"
 )
 
-type fetchHTTPClient struct {
-	cfg pal.ClientConfig
+var processStart = time.Now()
+
+func resolvePath(cwd string, p string) string {
+	if path.IsAbs(p) {
+		return p
+	}
+	return path.Join(cwd, p)
 }
 
-type requestContext struct {
-	abortController js.Value
-	timeout         *time.Timer
+type environment struct {
+	mu     sync.RWMutex
+	values map[string]string
 }
 
-func (ctx *requestContext) cleanup() {
-	if ctx.timeout != nil {
-		ctx.timeout.Stop()
-	}
+func newEnvironment() *environment {
+	return &environment{values: make(map[string]string)}
 }
 
-func (c *fetchHTTPClient) Execute(method, url string, body []byte, contentType string, reqHeaders map[string][]string) (int, map[string][]string, []byte, error) {
-	fetch := js.Global().Get("fetch")
-	if !fetch.Truthy() {
-		return 0, nil, nil, fmt.Errorf("browser fetch API is not available")
-	}
-
-	reqCtx := &requestContext{}
-	defer reqCtx.cleanup()
-
-	options, err := c.buildFetchOptions(method, body, contentType, reqHeaders, reqCtx)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-
-	resp, err := c.executeRequest(fetch, url, options)
-	if err != nil {
-		return 0, nil, nil, err
-	}
-
-	status := resp.Get("status").Int()
-	respHeaders := c.extractHeaders(resp)
-	respBody, err := c.extractBody(resp)
-	if err != nil {
-		return status, respHeaders, nil, err
-	}
-
-	return status, respHeaders, respBody, nil
+func (e *environment) get(key string) string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.values[key]
 }
 
-func (c *fetchHTTPClient) buildFetchOptions(method string, body []byte, contentType string, reqHeaders map[string][]string, reqCtx *requestContext) (map[string]any, error) {
-	options := map[string]any{
-		"method":   method,
-		"headers":  c.buildHeaders(contentType, reqHeaders),
-		"redirect": c.getRedirectMode(),
-	}
+func (e *environment) set(key, value string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.values[key] = value
+	return nil
+}
 
-	if body != nil && c.methodAllowsBody(method) {
-		options["body"] = c.encodeBody(body)
-	}
+func (e *environment) unset(key string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.values, key)
+	return nil
+}
 
-	if c.cfg.Timeout > 0 {
-		signal, err := c.setupTimeout(reqCtx)
-		if err != nil {
-			return options, err
+func (e *environment) list() map[string]string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	values := make(map[string]string, len(e.values))
+	maps.Copy(values, e.values)
+	return values
+}
+
+func createParentDirs(fsys *bridgeFS, p string) error {
+	dir := path.Dir(p)
+	info, err := fs.Stat(fsys, dir)
+	if err == nil {
+		if !info.IsDir() {
+			return &fs.PathError{Op: "mkdirAll", Path: dir, Err: fs.ErrInvalid}
 		}
-		options["signal"] = signal
-	}
-
-	return options, nil
-}
-
-func (c *fetchHTTPClient) methodAllowsBody(method string) bool {
-	m := strings.ToUpper(method)
-	return m != "GET" && m != "HEAD"
-}
-
-func (c *fetchHTTPClient) getRedirectMode() string {
-	if c.cfg.FollowRedirects.Enabled {
-		return "follow"
-	}
-	return "manual"
-}
-
-func (c *fetchHTTPClient) buildHeaders(contentType string, reqHeaders map[string][]string) js.Value {
-	headers := js.Global().Get("Headers").New()
-
-	for name, values := range reqHeaders {
-		if len(values) == 0 {
-			continue
-		}
-		headers.Call("set", name, values[0])
-		for _, value := range values[1:] {
-			headers.Call("append", name, value)
-		}
-	}
-
-	if contentType != "" {
-		headers.Call("set", "Content-Type", contentType)
-	}
-
-	return headers
-}
-
-func (c *fetchHTTPClient) encodeBody(body []byte) js.Value {
-	uint8Array := js.Global().Get("Uint8Array").New(len(body))
-	js.CopyBytesToJS(uint8Array, body)
-	return uint8Array
-}
-
-func (c *fetchHTTPClient) setupTimeout(reqCtx *requestContext) (js.Value, error) {
-	abortController := js.Global().Get("AbortController")
-	if !abortController.Truthy() {
-		return js.Undefined(), fmt.Errorf("AbortController API is not available")
-	}
-
-	controller := abortController.New()
-	if !controller.Truthy() {
-		return js.Undefined(), fmt.Errorf("failed to create AbortController")
-	}
-
-	reqCtx.abortController = controller
-	reqCtx.timeout = time.AfterFunc(c.cfg.Timeout, func() {
-		controller.Call("abort")
-	})
-
-	return controller.Get("signal"), nil
-}
-
-func (c *fetchHTTPClient) executeRequest(fetch js.Value, url string, options map[string]any) (js.Value, error) {
-	return awaitPromise(fetch.Invoke(url, js.ValueOf(options)))
-}
-
-func (c *fetchHTTPClient) extractHeaders(resp js.Value) map[string][]string {
-	headers := make(map[string][]string)
-	headersObj := resp.Get("headers")
-
-	forEach := js.FuncOf(func(_ js.Value, args []js.Value) any {
-		if len(args) < 2 {
-			return nil
-		}
-		value := args[0].String()
-		name := args[1].String()
-		headers[name] = append(headers[name], value)
 		return nil
-	})
-	defer forEach.Release()
-
-	headersObj.Call("forEach", forEach)
-	return headers
-}
-
-func (c *fetchHTTPClient) extractBody(resp js.Value) ([]byte, error) {
-	arrayBuffer, err := awaitPromise(resp.Call("arrayBuffer"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
-
-	uint8Array := js.Global().Get("Uint8Array").New(arrayBuffer)
-	bodyLen := uint8Array.Get("byteLength").Int()
-
-	body := make([]byte, bodyLen)
-	js.CopyBytesToGo(body, uint8Array)
-
-	return body, nil
+	if errors.Is(err, fs.ErrNotExist) {
+		return fsys.MkdirAll(dir, 0o755)
+	}
+	return err
 }
 
-func newPal(stdout, stderr io.Writer) pal.Platform {
+func wasmPal(fsys *bridgeFS, cwd string, stderr, stdout io.Writer, signals pal.SignalSource) pal.Platform {
+	env := newEnvironment()
+
 	return pal.Platform{
 		IO: pal.IO{
 			Stdout: stdout.Write,
 			Stderr: stderr.Write,
 		},
+		FS: pal.FS{
+			ReadFile: func(p string) ([]byte, error) {
+				return fs.ReadFile(fsys, resolvePath(cwd, p))
+			},
+			WriteFile: func(p string, data []byte) error {
+				fsys.mu.Lock()
+				defer fsys.mu.Unlock()
+
+				resolvedPath := resolvePath(cwd, p)
+				if err := createParentDirs(fsys, resolvedPath); err != nil {
+					return err
+				}
+				return fsys.WriteFile(resolvedPath, data, 0o644)
+			},
+			AppendFile: func(p string, data []byte) error {
+				fsys.mu.Lock()
+				defer fsys.mu.Unlock()
+
+				resolved := resolvePath(cwd, p)
+				if err := createParentDirs(fsys, resolved); err != nil {
+					return err
+				}
+				current, err := fs.ReadFile(fsys, resolved)
+				if err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+				return fsys.WriteFile(resolved, append(current, data...), 0o644)
+			},
+		},
+		OS: pal.OS{
+			GetEnv: env.get,
+			GetUsername: func() string {
+				panic("GetUsername is not supported in Playground")
+			},
+			GetUserHome: func() string {
+				panic("GetUserHome is not supported in Playground")
+			},
+			SetEnv:   env.set,
+			UnsetEnv: env.unset,
+			ListEnv:  env.list,
+			Exec: func(command string, args []string, envOverride map[string]string) (pal.ProcessHandle, error) {
+				panic("Exec is not supported in Playground")
+			},
+		},
+		Time: pal.Time{
+			Now:          time.Now,
+			MonotonicNow: func() time.Duration { return time.Since(processStart) },
+		},
 		HTTP: pal.HTTP{
 			NewClient: func(cfg pal.ClientConfig) pal.HTTPClient {
 				return &fetchHTTPClient{cfg: cfg}
 			},
+			Listen: listen,
 		},
+		Signals: signals,
 	}
 }

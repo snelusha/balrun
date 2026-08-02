@@ -1,10 +1,16 @@
-import type { BallerinaCore, BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
+import type {
+	BallerinaCore,
+	BallerinaRunOptions,
+	BallerinaRunResult,
+	BallerinaStopMode,
+} from "./ballerina-core";
 import type { FS } from "./fs/core";
 
 const NODE_FS_PROMISES_MODULE = "node:fs/promises";
 
 export interface WasmExports {
 	run: BallerinaCore["run"];
+	stop: BallerinaCore["stop"];
 }
 
 type GoRuntime = Go & {
@@ -26,9 +32,20 @@ export class WasmBridge implements BallerinaCore {
 		return bridge;
 	}
 
-	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
-		if (path === "") return Promise.reject(new Error("[balrun]: run path must not be empty."));
-		return this.exports.run(proxy, path, options).finally(() => this.clearScheduledTimeouts());
+	async run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
+		if (path === "") throw new Error("[balrun]: run path must not be empty.");
+		try {
+			const result = await this.exports.run(proxy, path, (event: RunEvent) => {
+				if (event.type === "output") options?.[event.stream]?.write(event.text);
+			});
+			return result ?? null;
+		} finally {
+			this.clearScheduledTimeouts();
+		}
+	}
+
+	stop(mode: BallerinaStopMode = "graceful"): Promise<boolean> {
+		return this.exports.stop(mode);
 	}
 
 	private clearScheduledTimeouts(): void {
@@ -42,6 +59,8 @@ export class WasmBridge implements BallerinaCore {
 		timeouts.clear();
 	}
 }
+
+type RunEvent = { type: "output"; stream: "stdout" | "stderr"; text: string };
 
 function loadWasm(
 	source: string | Response | PromiseLike<Response>,

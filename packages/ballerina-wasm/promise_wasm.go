@@ -1,58 +1,59 @@
+// Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
 package main
 
 import (
-	"sync"
 	"syscall/js"
 )
+
+type promiseResult struct {
+	value js.Value
+	err   error
+}
 
 func newPromise(fn func(resolve, reject js.Value)) js.Value {
 	var handler js.Func
 	handler = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		resolve, reject := args[0], args[1]
 		go func() {
 			defer handler.Release()
-			fn(resolve, reject)
+			fn(args[0], args[1])
 		}()
 		return nil
 	})
 	return js.Global().Get("Promise").New(handler)
 }
 
-type awaitResult struct {
-	value js.Value
-	err   error
-}
-
 func awaitPromise(promise js.Value) (js.Value, error) {
-	ch := make(chan awaitResult, 1)
+	ch := make(chan promiseResult, 1)
 
-	var (
-		thenFunc  js.Func
-		catchFunc js.Func
-		once      sync.Once
-	)
-
-	release := func() {
-		once.Do(func() {
-			thenFunc.Release()
-			catchFunc.Release()
-		})
-	}
-
-	thenFunc = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		defer release()
-		ch <- awaitResult{value: args[0]}
+	resolve := js.FuncOf(func(_ js.Value, args []js.Value) any {
+		ch <- promiseResult{value: args[0]}
 		return nil
 	})
+	defer resolve.Release()
 
-	catchFunc = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		defer release()
-		ch <- awaitResult{err: js.Error{Value: args[0]}}
+	reject := js.FuncOf(func(_ js.Value, args []js.Value) any {
+		ch <- promiseResult{err: js.Error{Value: args[0]}}
 		return nil
 	})
+	defer reject.Release()
 
-	promise.Call("then", thenFunc).Call("catch", catchFunc)
+	promise.Call("then", resolve, reject)
 
-	r := <-ch
-	return r.value, r.err
+	result := <-ch
+	return result.value, result.err
 }

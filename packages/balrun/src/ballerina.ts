@@ -1,7 +1,12 @@
 import { NodeFS } from "./fs/node";
 
 import type { FS } from "./fs/core";
-import type { BallerinaCore, BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
+import type {
+	BallerinaCore,
+	BallerinaRunOptions,
+	BallerinaRunResult,
+	BallerinaStopMode,
+} from "./ballerina-core";
 
 const DEFAULT_WASM_PATH = new URL("./ballerina.wasm", import.meta.url).href;
 
@@ -85,6 +90,10 @@ export class Ballerina {
 			...this._defaults,
 			...options,
 		});
+	}
+
+	async stop(mode: BallerinaStopMode = "graceful"): Promise<boolean> {
+		return (await this.bridge()).stop(mode);
 	}
 }
 
