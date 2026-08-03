@@ -8,7 +8,9 @@ import (
 	"ballerina-lang-go/tools/diagnostics"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path"
 	"syscall/js"
 )
 
@@ -52,6 +54,14 @@ func parseRunOptions(opts js.Value) runOptions {
 	}
 }
 
+func getWorkingDir(fsys fs.FS, p string) string {
+	info, err := fs.Stat(fsys, p)
+	if err == nil && info.IsDir() {
+		return p
+	}
+	return path.Dir(p)
+}
+
 func run(_ js.Value, args []js.Value) any {
 	return newPromise(func(resolve js.Value, _ js.Value) {
 		var optsArg js.Value
@@ -75,7 +85,7 @@ func run(_ js.Value, args []js.Value) any {
 		}
 
 		proxy := args[0]
-		path := args[1].String()
+		runPath := args[1].String()
 
 		signalSource, signals := newSignalSource()
 		if !activeRunContext.begin(signalSource) {
@@ -95,7 +105,7 @@ func run(_ js.Value, args []js.Value) any {
 
 		fsys := NewBridgeFS(proxy)
 
-		result, err := projects.Load(fsys, path)
+		result, err := projects.Load(fsys, runPath)
 		if err != nil {
 			fmt.Fprintf(stderr, "error: %v\n", err)
 			resolve.Invoke(1)
@@ -103,14 +113,14 @@ func run(_ js.Value, args []js.Value) any {
 		}
 
 		if diags := result.Diagnostics(); diags.HasErrors() {
-			printDiagnostics(fsys, path, stderr, diags, diagnostics.NewDiagnosticEnv(), opts.noColors)
+			printDiagnostics(fsys, runPath, stderr, diags, diagnostics.NewDiagnosticEnv(), opts.noColors)
 			resolve.Invoke(1)
 			return
 		}
 
 		compilation := result.Project().CurrentPackage().Compilation()
 		if diags := compilation.DiagnosticResult(); diags.HasErrors() {
-			printDiagnostics(fsys, path, stderr, diags, compilation.DiagnosticEnv(), opts.noColors)
+			printDiagnostics(fsys, runPath, stderr, diags, compilation.DiagnosticEnv(), opts.noColors)
 			resolve.Invoke(1)
 			return
 		}
@@ -122,7 +132,8 @@ func run(_ js.Value, args []js.Value) any {
 			return
 		}
 
-		pal := newPal(stdout, stderr, signals)
+		cwd := getWorkingDir(fsys, runPath)
+		pal := newPal(cwd, fsys, stdout, stderr, signals)
 		rt := runtime.NewRuntime(pal, result.Project().Environment().TypeEnv())
 		if !activeRunContext.setRuntime(signalSource, rt) {
 			fmt.Fprintln(stderr, "error: failed to register the Ballerina runtime")

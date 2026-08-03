@@ -4,8 +4,11 @@ import (
 	"ballerina-lang-go/platform/pal"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"path"
 	"strings"
 	"syscall/js"
 	"time"
@@ -209,11 +212,56 @@ func (c *fetchHTTPClient) extractBody(resp js.Value) ([]byte, error) {
 	return body, nil
 }
 
-func newPal(stdout, stderr io.Writer, signals pal.SignalSource) pal.Platform {
+func resolvePath(cwd string, p string) string {
+	if path.IsAbs(p) {
+		return p
+	}
+	return path.Join(cwd, p)
+}
+
+func createParentDirs(fsys *bridgeFS, p string) error {
+	dir := path.Dir(p)
+	info, err := fs.Stat(fsys, dir)
+	if err == nil {
+		if !info.IsDir() {
+			return &fs.PathError{Op: "mkdirAll", Path: dir, Err: fs.ErrInvalid}
+		}
+		return nil
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return fsys.MkdirAll(dir, 0o755)
+	}
+	return err
+}
+
+func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.SignalSource) pal.Platform {
 	return pal.Platform{
 		IO: pal.IO{
 			Stdout: stdout.Write,
 			Stderr: stderr.Write,
+		},
+		FS: pal.FS{
+			ReadFile: func(p string) ([]byte, error) {
+				return fs.ReadFile(fsys, resolvePath(cwd, p))
+			},
+			WriteFile: func(p string, data []byte) error {
+				resolvedPath := resolvePath(cwd, p)
+				if err := createParentDirs(fsys, resolvedPath); err != nil {
+					return err
+				}
+				return fsys.WriteFile(resolvedPath, data, 0o644)
+			},
+			AppendFile: func(p string, data []byte) error {
+				resolved := resolvePath(cwd, p)
+				if err := createParentDirs(fsys, resolved); err != nil {
+					return err
+				}
+				current, err := fs.ReadFile(fsys, resolved)
+				if err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
+				return fsys.WriteFile(resolved, append(current, data...), 0o644)
+			},
 		},
 		HTTP: pal.HTTP{
 			NewClient: func(cfg pal.ClientConfig) pal.HTTPClient {
