@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall/js"
@@ -67,9 +68,6 @@ func (c *fetchHTTPClient) Execute(ctx context.Context, method, url string, body 
 	respBody, err := c.extractBody(resp)
 	if err != nil {
 		return status, respHeaders, nil, err
-	}
-	if limit := c.cfg.ResponseLimits.MaxEntityBodySize; limit >= 0 && int64(len(respBody)) > limit {
-		return 0, nil, nil, fmt.Errorf("response entity body size exceeds: %d bytes", limit)
 	}
 
 	return status, respHeaders, io.NopCloser(bytes.NewReader(respBody)), nil
@@ -199,6 +197,17 @@ func (c *fetchHTTPClient) extractHeaders(resp js.Value) map[string][]string {
 }
 
 func (c *fetchHTTPClient) extractBody(resp js.Value) ([]byte, error) {
+	limit := c.cfg.ResponseLimits.MaxEntityBodySize
+	if limit >= 0 {
+		contentLength := resp.Get("headers").Call("get", "Content-Length")
+		if contentLength.Truthy() {
+			length, err := strconv.ParseInt(contentLength.String(), 10, 64)
+			if err == nil && length > limit {
+				return nil, fmt.Errorf("response entity body size exceeds: %d bytes", limit)
+			}
+		}
+	}
+
 	arrayBuffer, err := awaitPromise(resp.Call("arrayBuffer"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
@@ -206,10 +215,12 @@ func (c *fetchHTTPClient) extractBody(resp js.Value) ([]byte, error) {
 
 	uint8Array := js.Global().Get("Uint8Array").New(arrayBuffer)
 	bodyLen := uint8Array.Get("byteLength").Int()
+	if limit >= 0 && int64(bodyLen) > limit {
+		return nil, fmt.Errorf("response entity body size exceeds: %d bytes", limit)
+	}
 
 	body := make([]byte, bodyLen)
 	js.CopyBytesToGo(body, uint8Array)
-
 	return body, nil
 }
 

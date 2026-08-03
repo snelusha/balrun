@@ -50,12 +50,18 @@ export class MemFS implements FS {
 	async writeFile(path: string, content: string): Promise<boolean> {
 		const separator = path.lastIndexOf("/");
 		const parent = separator === -1 ? "." : path.slice(0, separator);
-		if (!this.directories.has(parent)) return false;
+		if (
+			this.directories.has(path) ||
+			!this.directories.has(parent) ||
+			!this.canCreateDirectory(parent)
+		)
+			return false;
 		this.files.set(path, content);
 		return true;
 	}
 
 	async mkdirAll(path: string): Promise<boolean> {
+		if (!this.canCreateDirectory(path)) return false;
 		this.addParentDirectories(path);
 		this.directories.add(path);
 		return true;
@@ -66,6 +72,14 @@ export class MemFS implements FS {
 	}
 	move(_oldPath: string, _newPath: string): Promise<boolean> {
 		throw new Error("Method not implemented.");
+	}
+
+	private canCreateDirectory(path: string): boolean {
+		const parts = path.split("/");
+		for (let i = 1; i <= parts.length; i++) {
+			if (this.files.has(parts.slice(0, i).join("/"))) return false;
+		}
+		return true;
 	}
 
 	private addParentDirectories(path: string): void {
