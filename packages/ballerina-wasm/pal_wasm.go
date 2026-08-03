@@ -2,6 +2,8 @@ package main
 
 import (
 	"ballerina-lang-go/platform/pal"
+	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -14,26 +16,39 @@ type fetchHTTPClient struct {
 }
 
 type requestContext struct {
-	abortController js.Value
-	timeout         *time.Timer
+	done    chan struct{}
+	timeout *time.Timer
 }
 
 func (ctx *requestContext) cleanup() {
 	if ctx.timeout != nil {
 		ctx.timeout.Stop()
 	}
+	close(ctx.done)
 }
 
-func (c *fetchHTTPClient) Execute(method, url string, body []byte, contentType string, reqHeaders map[string][]string) (int, map[string][]string, []byte, error) {
+func (c *fetchHTTPClient) Execute(ctx context.Context, method, url string, body io.Reader, _ int64, contentType string, reqHeaders map[string][]string) (int, map[string][]string, io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, nil, nil, err
+	}
+
 	fetch := js.Global().Get("fetch")
 	if !fetch.Truthy() {
 		return 0, nil, nil, fmt.Errorf("browser fetch API is not available")
 	}
 
-	reqCtx := &requestContext{}
+	bodyBytes, err := readRequestBody(method, body)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, nil, nil, err
+	}
+
+	reqCtx := &requestContext{done: make(chan struct{})}
 	defer reqCtx.cleanup()
 
-	options, err := c.buildFetchOptions(method, body, contentType, reqHeaders, reqCtx)
+	options, err := c.buildFetchOptions(ctx, method, bodyBytes, contentType, reqHeaders, reqCtx)
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -49,23 +64,37 @@ func (c *fetchHTTPClient) Execute(method, url string, body []byte, contentType s
 	if err != nil {
 		return status, respHeaders, nil, err
 	}
+	if limit := c.cfg.ResponseLimits.MaxEntityBodySize; limit >= 0 && int64(len(respBody)) > limit {
+		return 0, nil, nil, fmt.Errorf("response entity body size exceeds: %d bytes", limit)
+	}
 
-	return status, respHeaders, respBody, nil
+	return status, respHeaders, io.NopCloser(bytes.NewReader(respBody)), nil
 }
 
-func (c *fetchHTTPClient) buildFetchOptions(method string, body []byte, contentType string, reqHeaders map[string][]string, reqCtx *requestContext) (map[string]any, error) {
+func readRequestBody(method string, body io.Reader) ([]byte, error) {
+	if body == nil || !methodAllowsBody(method) {
+		return nil, nil
+	}
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read request body: %w", err)
+	}
+	return data, nil
+}
+
+func (c *fetchHTTPClient) buildFetchOptions(ctx context.Context, method string, body []byte, contentType string, reqHeaders map[string][]string, reqCtx *requestContext) (map[string]any, error) {
 	options := map[string]any{
 		"method":   method,
 		"headers":  c.buildHeaders(contentType, reqHeaders),
 		"redirect": c.getRedirectMode(),
 	}
 
-	if body != nil && c.methodAllowsBody(method) {
+	if body != nil {
 		options["body"] = c.encodeBody(body)
 	}
 
-	if c.cfg.Timeout > 0 {
-		signal, err := c.setupTimeout(reqCtx)
+	if c.cfg.Timeout > 0 || ctx.Done() != nil {
+		signal, err := c.setupAbortSignal(ctx, reqCtx)
 		if err != nil {
 			return options, err
 		}
@@ -75,9 +104,9 @@ func (c *fetchHTTPClient) buildFetchOptions(method string, body []byte, contentT
 	return options, nil
 }
 
-func (c *fetchHTTPClient) methodAllowsBody(method string) bool {
-	m := strings.ToUpper(method)
-	return m != "GET" && m != "HEAD"
+func methodAllowsBody(method string) bool {
+	method = strings.ToUpper(method)
+	return method != "GET" && method != "HEAD"
 }
 
 func (c *fetchHTTPClient) getRedirectMode() string {
@@ -113,7 +142,7 @@ func (c *fetchHTTPClient) encodeBody(body []byte) js.Value {
 	return uint8Array
 }
 
-func (c *fetchHTTPClient) setupTimeout(reqCtx *requestContext) (js.Value, error) {
+func (c *fetchHTTPClient) setupAbortSignal(ctx context.Context, reqCtx *requestContext) (js.Value, error) {
 	abortController := js.Global().Get("AbortController")
 	if !abortController.Truthy() {
 		return js.Undefined(), fmt.Errorf("AbortController API is not available")
@@ -124,10 +153,20 @@ func (c *fetchHTTPClient) setupTimeout(reqCtx *requestContext) (js.Value, error)
 		return js.Undefined(), fmt.Errorf("failed to create AbortController")
 	}
 
-	reqCtx.abortController = controller
-	reqCtx.timeout = time.AfterFunc(c.cfg.Timeout, func() {
-		controller.Call("abort")
-	})
+	if c.cfg.Timeout > 0 {
+		reqCtx.timeout = time.AfterFunc(c.cfg.Timeout, func() {
+			controller.Call("abort")
+		})
+	}
+	if done := ctx.Done(); done != nil {
+		go func() {
+			select {
+			case <-done:
+				controller.Call("abort")
+			case <-reqCtx.done:
+			}
+		}()
+	}
 
 	return controller.Get("signal"), nil
 }
