@@ -87,6 +87,20 @@ describe("WasmBridge", () => {
 			expect(stdout.join("")).toBe("Hello, Ballerina!\n");
 		});
 
+		it("reads, writes, and appends files", async () => {
+			const fs = new MemFS({
+				"main.bal": await Bun.file(new URL("./fixtures/file-io.bal", import.meta.url)).text(),
+			});
+			const stdout: string[] = [];
+
+			expect(
+				await bridge.run(fs, "main.bal", {
+					stdout: { write: (chunk) => stdout.push(chunk) },
+				}),
+			).toBe(0);
+			expect(stdout.join("")).toBe("first second\n");
+		});
+
 		it("returns a non-zero exit code when loading fails", async () => {
 			const stderr: string[] = [];
 			const exitCode = await bridge.run(new MemFS({}), "missing.bal", {
