@@ -57,7 +57,7 @@ describe("React", () => {
 
 		expect(container.innerHTML).toBe("<output>true:null</output>");
 		expect(runtime.current).not.toBeNull();
-		expect(runtime.current!.run("main.bal")).resolves.toBeNull();
+		expect(runtime.current!.run("main.bal")).resolves.toBe(0);
 		expect(stdout.join("")).toBe("Hello, Ballerina!\n");
 
 		await act(async () => root.unmount());
