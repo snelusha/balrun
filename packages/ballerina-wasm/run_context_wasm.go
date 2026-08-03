@@ -53,17 +53,5 @@ func (rc *runContext) sendSignal(sig pal.Signal) bool {
 	if rc.signals == nil {
 		return false
 	}
-	rc.signals.send(sig)
-	return true
+	return rc.signals.send(sig)
 }
-
-// func (rc *runContext) begin(signals *signalSource) bool {
-// 	rc.mu.Lock()
-// 	defer rc.mu.Unlock()
-//
-// 	rc.signals = signals
-// 	if rc.signals != nil || rc.rt != nil {
-// 		return false
-// 	}
-// 	return true
-// }

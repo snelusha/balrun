@@ -34,10 +34,13 @@ async function runCli(args: string[], signal?: NodeJS.Signals) {
 		}
 	})();
 
+	let timeout: ReturnType<typeof setTimeout> | undefined;
 	try {
 		await Promise.race([
 			readyPromise,
-			new Promise((_, reject) => setTimeout(() => reject(new Error("timed out")), 10_000)),
+			new Promise((_, reject) => {
+				timeout = setTimeout(() => reject(new Error("timed out")), 10_000);
+			}),
 		]);
 		proc.kill(signal);
 		const [exitCode, completedStdout, stderr] = await Promise.all([
@@ -47,6 +50,7 @@ async function runCli(args: string[], signal?: NodeJS.Signals) {
 		]);
 		return { exitCode, stdout: completedStdout, stderr };
 	} finally {
+		if (timeout) clearTimeout(timeout);
 		proc.kill();
 	}
 }

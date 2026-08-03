@@ -28,16 +28,12 @@ const signalHandlers = [
 let exitCode;
 try {
 	exitCode = await ballerina.run(path);
+} catch (error) {
+	process.stderr.write(`${error}\n`);
+	exitCode = 1;
 } finally {
 	clearInterval(keepAlive);
 	for (const [name, handler] of signalHandlers) process.off(name, handler);
 }
 
-await Promise.all([flush(process.stdout), flush(process.stderr)]);
-process.exit(exitCode);
-
-function flush(stream) {
-	return new Promise((resolve, reject) => {
-		stream.write("", (err) => (err ? reject(err) : resolve()));
-	});
-}
+process.exitCode = exitCode;
