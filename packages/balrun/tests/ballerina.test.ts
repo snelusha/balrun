@@ -10,6 +10,7 @@ import type {
 } from "../src/ballerina-core.ts";
 import type { BallerinaOptions } from "../src/ballerina.ts";
 import type { FS } from "../src/fs/core.ts";
+import type { HTTPDispatchRequest, HTTPListenerResponse } from "../src/http-listener.ts";
 
 class SpyCore implements BallerinaCore {
 	calls: Array<{ fs: FS; path: string; options?: BallerinaRunOptions }> = [];
@@ -23,6 +24,10 @@ class SpyCore implements BallerinaCore {
 	stop(mode: BallerinaStopMode) {
 		this.signals.push(mode);
 		return true;
+	}
+
+	async dispatchHttpRequest(_request: HTTPDispatchRequest): Promise<HTTPListenerResponse> {
+		return { statusCode: 200, headers: {}, body: new Uint8Array() };
 	}
 }
 
