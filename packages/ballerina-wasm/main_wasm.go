@@ -17,6 +17,8 @@ import (
 func main() {
 	js.Global().Set("run", js.FuncOf(run))
 	js.Global().Set("stop", js.FuncOf(stop))
+
+	js.Global().Set("dispatchHttpRequest", js.FuncOf(dispatchHTTPRequest))
 	select {}
 }
 
@@ -35,10 +37,15 @@ func stop(_ js.Value, args []js.Value) any {
 	}
 }
 
+type platformOptions struct {
+	httpListenerTransport js.Value
+}
+
 type runOptions struct {
 	noColors bool
 	stdout   io.Writer
 	stderr   io.Writer
+	platform platformOptions
 }
 
 func parseRunOptions(opts js.Value) runOptions {
@@ -51,7 +58,15 @@ func parseRunOptions(opts js.Value) runOptions {
 		noColors: !colors.IsUndefined() && colors.Type() == js.TypeBoolean && !colors.Bool(),
 		stdout:   streamWriterFromJS(opts.Get("stdout")),
 		stderr:   streamWriterFromJS(opts.Get("stderr")),
+		platform: parsePlatformOptions(opts.Get("platform")),
 	}
+}
+
+func parsePlatformOptions(value js.Value) platformOptions {
+	if value.Type() != js.TypeObject || value.IsNull() {
+		return platformOptions{httpListenerTransport: js.Undefined()}
+	}
+	return platformOptions{httpListenerTransport: value.Get("httpListenerTransport")}
 }
 
 func getWorkingDir(fsys fs.FS, p string) string {
@@ -133,7 +148,7 @@ func run(_ js.Value, args []js.Value) any {
 		}
 
 		cwd := getWorkingDir(fsys, runPath)
-		pal := newPal(cwd, fsys, stdout, stderr, signals)
+		pal := newPal(cwd, fsys, stdout, stderr, signals, opts.platform.httpListenerTransport)
 		rt := runtime.NewRuntime(pal, result.Project().Environment().TypeEnv())
 		if !activeRunContext.setRuntime(signalSource, rt) {
 			fmt.Fprintln(stderr, "error: failed to register the Ballerina runtime")

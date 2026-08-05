@@ -1,6 +1,7 @@
 import { NodeFS } from "./fs/node";
 
 import type { FS } from "./fs/core";
+import type { HTTPDispatchRequest, HTTPListenerResponse } from "./http-listener";
 import type {
 	BallerinaCore,
 	BallerinaRunOptions,
@@ -93,7 +94,11 @@ export class Ballerina {
 	}
 
 	async stop(mode: BallerinaStopMode = "graceful"): Promise<boolean> {
-		return (await this.bridge()).stop?.(mode) ?? false;
+		return (await this.bridge()).stop(mode);
+	}
+
+	async dispatchHttpRequest(request: HTTPDispatchRequest): Promise<HTTPListenerResponse> {
+		return (await this.bridge()).dispatchHttpRequest(request);
 	}
 }
 

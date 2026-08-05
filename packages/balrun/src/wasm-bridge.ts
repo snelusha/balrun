@@ -4,13 +4,35 @@ import type {
 	BallerinaRunResult,
 	BallerinaStopMode,
 } from "./ballerina-core";
+import { createHTTPListenerTransport } from "./http-listener";
+
+import type {
+	HTTPDispatchRequest,
+	HTTPListenerTransport,
+	HTTPListenerReady,
+	HTTPListenerRequest,
+	HTTPListenerResponse,
+} from "./http-listener";
 import type { FS } from "./fs/core";
 
 const NODE_FS_PROMISES_MODULE = "node:fs/promises";
 
+interface WasmPlatform {
+	httpListenerTransport: HTTPListenerTransport;
+}
+
+interface WasmRunOptions extends BallerinaRunOptions {
+	platform: WasmPlatform;
+}
+
 export interface WasmExports {
-	run: BallerinaCore["run"];
+	run(proxy: FS, path: string, options?: WasmRunOptions): Promise<BallerinaRunResult>;
 	stop: (mode: BallerinaStopMode) => boolean;
+	dispatchHttpRequest: (
+		host: string,
+		port: number,
+		request: HTTPListenerRequest,
+	) => Promise<HTTPListenerResponse>;
 }
 
 type GoRuntime = Go & {
@@ -21,6 +43,15 @@ export class WasmBridge implements BallerinaCore {
 	private exports: WasmExports = {} as WasmExports;
 	private go: GoRuntime | null = null;
 
+	private onListenerReady: ((listener: HTTPListenerReady) => void) | undefined;
+	private platform: WasmPlatform = {
+		httpListenerTransport: createHTTPListenerTransport(
+			(listener, request) =>
+				this.exports.dispatchHttpRequest(listener.host, listener.port, request),
+			(listener) => this.onListenerReady?.(listener),
+		),
+	};
+
 	static async load(source: string | Response | PromiseLike<Response>): Promise<WasmBridge> {
 		await import("./wasm_exec");
 		const go = new Go();
@@ -28,17 +59,27 @@ export class WasmBridge implements BallerinaCore {
 		go.run(instance);
 		const bridge = new WasmBridge();
 		bridge.go = go;
-		bridge.exports = { ...globalThis };
+		// FIXME: `stop()` conflicts with DOM `window.stop()`
+		bridge.exports = { ...globalThis } as unknown as WasmExports;
 		return bridge;
 	}
 
 	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
 		if (path === "") return Promise.reject(new Error("[balrun]: run path must not be empty."));
-		return this.exports.run(proxy, path, options).finally(() => this.clearScheduledTimeouts());
+		const { onListenerReady, ...runOptions } = options ?? {};
+		this.onListenerReady = onListenerReady;
+		return this.exports.run(proxy, path, { ...runOptions, platform: this.platform }).finally(() => {
+			this.onListenerReady = undefined;
+			this.clearScheduledTimeouts();
+		});
 	}
 
 	stop(mode: BallerinaStopMode): boolean {
 		return this.exports.stop(mode);
+	}
+
+	dispatchHttpRequest(request: HTTPDispatchRequest): Promise<HTTPListenerResponse> {
+		return this.platform.httpListenerTransport.dispatch(request);
 	}
 
 	private clearScheduledTimeouts(): void {
