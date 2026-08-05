@@ -144,7 +144,7 @@ func (l *bridgeFS) openDir(name string, stat js.Value) (fs.File, error) {
 	}, nil
 }
 
-func (l *bridgeFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
+func (l *bridgeFS) WriteFile(name string, data []byte, _ fs.FileMode) error {
 	res, err := l.bridgeCall("writeFile", name, "writeFile", name, string(data))
 	if err != nil {
 		return err
