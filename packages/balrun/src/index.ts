@@ -7,5 +7,6 @@ export type {
 	BallerinaCore,
 	BallerinaRunOptions,
 	BallerinaRunResult,
+	BallerinaStopMode,
 	StreamWriter,
 } from "./ballerina-core";

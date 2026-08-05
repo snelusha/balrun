@@ -1,5 +1,5 @@
 import type { FS } from "./fs/core";
-import type { BallerinaRunOptions } from "./ballerina-core";
+import type { BallerinaRunOptions, BallerinaStopMode } from "./ballerina-core";
 
 declare global {
 	class Go {
@@ -7,9 +7,6 @@ declare global {
 		run(instance: WebAssembly.Instance): Promise<void>;
 	}
 
-	var run: (
-		proxy: FS,
-		path: string,
-		options?: BallerinaRunOptions,
-	) => Promise<{ error?: string } | null>;
+	var run: (proxy: FS, path: string, options?: BallerinaRunOptions) => Promise<number>;
+	var stop: (mode: BallerinaStopMode) => boolean;
 }

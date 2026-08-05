@@ -23,12 +23,23 @@ Accepts a `.bal` file, a package directory, or `.` for the current package.
 import { Ballerina } from "@snelusha/balrun";
 
 const ballerina = new Ballerina({ colors: false });
-
-// Returns null on success, or { error: "..." } on failure
-const result = await ballerina.run("./main.bal", { colors: true });
+const exitCode = await ballerina.run("./main.bal", { colors: true });
 ```
 
 Options passed to `run()` override the constructor defaults for that call only.
+
+## Stopping a run
+
+Use `stop()` to stop a running Ballerina program. The default mode is graceful; pass `"immediate"` to stop immediately.
+
+```ts
+const running = ballerina.run("./service.bal");
+
+await ballerina.stop();
+const exitCode = await running;
+```
+
+The CLI forwards `SIGINT` and `SIGTERM` as graceful stops, and `SIGQUIT` as an immediate stop.
 
 ## React
 

@@ -170,7 +170,7 @@ func (c *fetchHTTPClient) extractBody(resp js.Value) ([]byte, error) {
 	return body, nil
 }
 
-func newPal(stdout, stderr io.Writer) pal.Platform {
+func newPal(stdout, stderr io.Writer, signals pal.SignalSource) pal.Platform {
 	return pal.Platform{
 		IO: pal.IO{
 			Stdout: stdout.Write,
@@ -181,5 +181,6 @@ func newPal(stdout, stderr io.Writer) pal.Platform {
 				return &fetchHTTPClient{cfg: cfg}
 			},
 		},
+		Signals: signals,
 	}
 }

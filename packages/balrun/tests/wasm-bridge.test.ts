@@ -75,7 +75,7 @@ describe("WasmBridge", () => {
 			);
 		});
 
-		it("runs a Ballerina file and returns the result", async () => {
+		it("runs a Ballerina file and returns its exit code", async () => {
 			const fs = new MemFS({
 				"main.bal": await Bun.file(new URL("./fixtures/hello.bal", import.meta.url)).text(),
 			});
@@ -83,8 +83,18 @@ describe("WasmBridge", () => {
 			const result = await bridge.run(fs, "main.bal", {
 				stdout: { write: (chunk) => stdout.push(chunk) },
 			});
-			expect(result).toBeNull();
+			expect(result).toBe(0);
 			expect(stdout.join("")).toBe("Hello, Ballerina!\n");
+		});
+
+		it("returns a non-zero exit code when loading fails", async () => {
+			const stderr: string[] = [];
+			const exitCode = await bridge.run(new MemFS({}), "missing.bal", {
+				stderr: { write: (chunk) => stderr.push(chunk) },
+			});
+
+			expect(exitCode).toBe(1);
+			expect(stderr.join("")).toBe("error: open missing.bal: file does not exist\n");
 		});
 	});
 });
