@@ -27,8 +27,11 @@ func (h *wasmListenerHandle) Close() error {
 func (h *wasmListenerHandle) close(mode string) error {
 	config := js.ValueOf(map[string]any{"host": h.host, "port": h.port})
 	_, err := awaitPromise(h.transport.Call("close", config, mode))
+	if err != nil {
+		return err
+	}
 	activeRunContext.unregisterHandler(h.host, h.port)
-	return err
+	return nil
 }
 
 func listenerKey(host string, port int) string {

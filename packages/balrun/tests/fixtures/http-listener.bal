@@ -15,8 +15,12 @@ service / on new http:Listener(6969, {host: "127.0.0.1"}) {
     }
 
     resource function get inspect(http:Request request) returns http:Response|error {
+        string? name = request.getQueryParamValue("name");
         string header = check request.getHeader("X-Test");
-        return response(string `${request.rawPath}|${header}`);
+        if name is string {
+            return response(string `${name}|${header}`);
+        }
+        return response(string `|${header}`);
     }
 
     resource function post echo(http:Request request) returns http:Response|error {

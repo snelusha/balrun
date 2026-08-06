@@ -1,6 +1,7 @@
 import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from "node:http";
 
 const NODE_HTTP_MODULE = "node:http";
+const MAX_REQUEST_BODY_SIZE = 1024 * 1024;
 
 export interface HTTPListenerConfig {
 	host: string;
@@ -93,14 +94,14 @@ export function createHTTPListenerTransport(
 			}
 		},
 		async close(config, mode) {
-			const listener = listeners.get(listenerKey(config));
+			const key = listenerKey(config);
+			const listener = listeners.get(key);
 			if (!listener) return;
-			listeners.delete(listenerKey(config));
-			if (!listener.server) return;
 			if (mode === "immediate") {
 				for (const socket of listener.sockets ?? []) socket.destroy();
 			}
-			await close(listener.server);
+			if (listener.server) await close(listener.server);
+			listeners.delete(key);
 		},
 		async dispatch(request) {
 			const listener = [...listeners.values()].find((candidate) =>
@@ -125,12 +126,18 @@ async function dispatchRequest(
 	dispatch: Dispatch,
 ): Promise<void> {
 	try {
+		const body = await readBody(request);
+		if (!body) {
+			response.statusCode = 413;
+			response.end();
+			return;
+		}
 		const result = await dispatch(listener, {
 			method: request.method ?? "GET",
 			path: request.url ?? "/",
 			host: request.headers.host ?? "localhost",
 			headers: headersFromNode(request.headers),
-			body: await readBody(request),
+			body,
 		});
 		response.writeHead(result.statusCode, result.headers);
 		response.end(result.body);
@@ -222,10 +229,21 @@ function supportsNodeHTTP(): boolean {
 	return typeof process !== "undefined" && !!process.versions?.node;
 }
 
-async function readBody(request: IncomingMessage): Promise<Uint8Array> {
+async function readBody(request: IncomingMessage): Promise<Uint8Array | undefined> {
 	const chunks: Uint8Array[] = [];
-	for await (const chunk of request) chunks.push(chunk as Uint8Array);
-	const length = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+	let length = 0;
+	let tooLarge = false;
+	for await (const chunk of request) {
+		if (tooLarge) continue;
+		const bytes = chunk as Uint8Array;
+		length += bytes.byteLength;
+		if (length > MAX_REQUEST_BODY_SIZE) {
+			tooLarge = true;
+			continue;
+		}
+		chunks.push(bytes);
+	}
+	if (tooLarge) return;
 	const body = new Uint8Array(length);
 	let offset = 0;
 	for (const chunk of chunks) {

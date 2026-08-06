@@ -44,6 +44,7 @@ export class WasmBridge implements BallerinaCore {
 	private go: GoRuntime | null = null;
 
 	private onListenerReady: ((listener: HTTPListenerReady) => void) | undefined;
+	private activeRun = false;
 	private platform: WasmPlatform = {
 		httpListenerTransport: createHTTPListenerTransport(
 			(listener, request) =>
@@ -66,9 +67,12 @@ export class WasmBridge implements BallerinaCore {
 
 	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
 		if (path === "") return Promise.reject(new Error("[balrun]: run path must not be empty."));
+		if (this.activeRun) return Promise.reject(new Error("[balrun]: a run is already active."));
 		const { onListenerReady, ...runOptions } = options ?? {};
+		this.activeRun = true;
 		this.onListenerReady = onListenerReady;
 		return this.exports.run(proxy, path, { ...runOptions, platform: this.platform }).finally(() => {
+			this.activeRun = false;
 			this.onListenerReady = undefined;
 			this.clearScheduledTimeouts();
 		});

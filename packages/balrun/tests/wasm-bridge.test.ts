@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { WasmBridge } from "../src/wasm-bridge";
 import { MemFS } from "./memfs";
 
+import type { WasmExports } from "../src/wasm-bridge";
+
 const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
 
 describe("WasmBridge", () => {
@@ -75,6 +77,25 @@ describe("WasmBridge", () => {
 			);
 		});
 
+		it("rejects concurrent runs", async () => {
+			const isolatedBridge = new WasmBridge();
+			let resolveRun: (result: number) => void = () => {};
+			const pendingRun = new Promise<number>((resolve) => {
+				resolveRun = resolve;
+			});
+			(isolatedBridge as unknown as { exports: Pick<WasmExports, "run"> }).exports = {
+				run: () => pendingRun,
+			};
+
+			const activeRun = isolatedBridge.run(new MemFS({}), "main.bal");
+			expect(isolatedBridge.run(new MemFS({}), "main.bal")).rejects.toThrow(
+				"[balrun]: a run is already active.",
+			);
+			resolveRun(0);
+			expect(await activeRun).toBe(0);
+			expect(await isolatedBridge.run(new MemFS({}), "main.bal")).toBe(0);
+		});
+
 		it("runs a Ballerina file and returns its exit code", async () => {
 			const fs = new MemFS({
 				"main.bal": await Bun.file(new URL("./fixtures/hello.bal", import.meta.url)).text(),
@@ -138,13 +159,18 @@ describe("WasmBridge", () => {
 			const inspected = await fetch(`${origin}/inspect?name=balrun`, {
 				headers: { "X-Test": "request-header" },
 			});
-			expect(await inspected.text()).toBe("/inspect?name=balrun|request-header");
+			expect(await inspected.text()).toBe("balrun|request-header");
 
 			for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
 				const echoed = await fetch(`${origin}/echo`, { method, body: `${method} body` });
 				expect(echoed.status).toBe(200);
 				expect(await echoed.text()).toBe(`${method} body`);
 			}
+			const tooLarge = await fetch(`${origin}/echo`, {
+				method: "POST",
+				body: "x".repeat(1024 * 1024 + 1),
+			});
+			expect(tooLarge.status).toBe(413);
 			const head = await fetch(`${origin}/echo`, { method: "HEAD" });
 			expect(head.status).toBe(200);
 			expect(await head.text()).toBe("");
