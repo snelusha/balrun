@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"path"
 	"strconv"
 	"strings"
@@ -15,6 +16,8 @@ import (
 	"syscall/js"
 	"time"
 )
+
+var processStart = time.Now()
 
 type fetchHTTPClient struct {
 	cfg pal.ClientConfig
@@ -284,7 +287,7 @@ func (f *palFS) appendFile(p string, data []byte) error {
 	return f.fsys.WriteFile(resolvedPath, append(current, data...), 0o644)
 }
 
-func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.SignalSource) pal.Platform {
+func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.SignalSource, httpListenerTransport js.Value) pal.Platform {
 	palFS := &palFS{cwd: cwd, fsys: fsys}
 
 	return pal.Platform{
@@ -301,6 +304,13 @@ func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.Si
 			NewClient: func(cfg pal.ClientConfig) pal.HTTPClient {
 				return &fetchHTTPClient{cfg: cfg}
 			},
+			Listen: func(cfg pal.ServerConfig, handler http.Handler) (pal.ServerHandle, error) {
+				return listen(httpListenerTransport, cfg, handler)
+			},
+		},
+		Time: pal.Time{
+			Now:          time.Now,
+			MonotonicNow: func() time.Duration { return time.Since(processStart) },
 		},
 		Signals: signals,
 	}
