@@ -5,6 +5,7 @@ import type {
 	BallerinaStopMode,
 } from "./ballerina-core";
 import { createHTTPListenerTransport } from "./http-listener";
+import { createOSPlatform } from "./os";
 
 import type {
 	HTTPDispatchRequest,
@@ -19,6 +20,7 @@ const NODE_FS_PROMISES_MODULE = "node:fs/promises";
 
 interface WasmPlatform {
 	httpListenerTransport: HTTPListenerTransport;
+	os: ReturnType<typeof createOSPlatform>;
 }
 
 interface WasmRunOptions extends BallerinaRunOptions {
@@ -45,7 +47,8 @@ export class WasmBridge implements BallerinaCore {
 
 	private onListenerReady: ((listener: HTTPListenerReady) => void) | undefined;
 	private activeRun = false;
-	private platform: WasmPlatform = {
+
+	private platform: Omit<WasmPlatform, "os"> = {
 		httpListenerTransport: createHTTPListenerTransport(
 			(listener, request) =>
 				this.exports.dispatchHttpRequest(listener.host, listener.port, request),
@@ -65,17 +68,22 @@ export class WasmBridge implements BallerinaCore {
 		return bridge;
 	}
 
-	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
+	async run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
 		if (path === "") return Promise.reject(new Error("[balrun]: run path must not be empty."));
 		if (this.activeRun) return Promise.reject(new Error("[balrun]: a run is already active."));
 		const { onListenerReady, ...runOptions } = options ?? {};
 		this.activeRun = true;
 		this.onListenerReady = onListenerReady;
-		return this.exports.run(proxy, path, { ...runOptions, platform: this.platform }).finally(() => {
+		try {
+			return await this.exports.run(proxy, path, {
+				...runOptions,
+				platform: { ...this.platform, os: createOSPlatform(runOptions.env) },
+			});
+		} finally {
 			this.activeRun = false;
 			this.onListenerReady = undefined;
 			this.clearScheduledTimeouts();
-		});
+		}
 	}
 
 	stop(mode: BallerinaStopMode): boolean {

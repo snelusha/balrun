@@ -34,11 +34,11 @@ export function BallerinaProvider({ children, ...options }: BallerinaProviderPro
 	const [isReady, setIsReady] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
 
-	const { fs, core, wasmSource, colors, stdout, stderr } = options;
+	const { fs, core, wasmSource, colors, stdout, stderr, env } = options;
 
 	const opts = useMemo(
-		() => ({ fs, core, wasmSource, colors, stdout, stderr }),
-		[fs, core, wasmSource, colors, stdout, stderr],
+		() => ({ fs, core, wasmSource, colors, stdout, stderr, env }),
+		[fs, core, wasmSource, colors, stdout, stderr, env],
 	);
 
 	useEffect(() => {
