@@ -128,6 +128,30 @@ await new Ballerina({ fs: new NodeFS() }).run("./main.bal");
 
 See [`examples/memfs`](https://github.com/snelusha/balrun/tree/main/examples/memfs) for a full implementation.
 
+### `env`
+
+In browsers, Ballerina's environment-variable operations use the supplied map. Mutations made through `os:setEnv` and `os:unsetEnv` are reflected in the same map. User and home-directory lookups and subprocess execution are unavailable in browsers and panic when called. Node.js and Bun use the host environment and support all OS operations, including `os:exec`.
+
+```ts
+const env = new Map([["GREETING", "hello"]]);
+await new Ballerina({ fs, env }).run("main.bal");
+```
+
+### HTTP services
+
+Node.js and Bun bind Ballerina HTTP listeners to a local socket. Browsers cannot bind sockets; use `dispatchHttpRequest` to forward requests to the running service instead. `onListenerReady` provides the listener address in either environment.
+
+```ts
+const running = ballerina.run("service.bal", {
+	onListenerReady: async ({ host, port }) => {
+		const response = await ballerina.dispatchHttpRequest({ host, port, path: "/ping" });
+		console.log(new TextDecoder().decode(response.body));
+		await ballerina.stop();
+	},
+});
+await running;
+```
+
 ### `wasmSource` / `core`
 
 By default, `Ballerina` loads the bundled `ballerina.wasm`. Pass `wasmSource` to load a different local path or HTTP(S) URL:
