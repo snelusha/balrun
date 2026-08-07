@@ -122,6 +122,20 @@ describe("WasmBridge", () => {
 			expect(stdout.join("")).toBe("first second\n");
 		});
 
+		it("supports OS operations and subprocesses", async () => {
+			const fs = new MemFS({
+				"main.bal": await Bun.file(new URL("./fixtures/os.bal", import.meta.url)).text(),
+			});
+			const stdout: string[] = [];
+
+			expect(
+				await bridge.run(fs, "main.bal", {
+					stdout: { write: (chunk) => stdout.push(chunk) },
+				}),
+			).toBe(0);
+			expect(stdout.join("")).toBe("present\npresent\ntrue\ntrue\ntrue\n0\nhello\n\ntrue\n");
+		});
+
 		it("returns a non-zero exit code when loading fails", async () => {
 			const stderr: string[] = [];
 			const exitCode = await bridge.run(new MemFS({}), "missing.bal", {

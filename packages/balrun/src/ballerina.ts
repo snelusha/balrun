@@ -41,6 +41,7 @@ export class Ballerina {
 			colors: options.colors ?? true,
 			stdout: options.stdout,
 			stderr: options.stderr,
+			env: options.env,
 		};
 	}
 

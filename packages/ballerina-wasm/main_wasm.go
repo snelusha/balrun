@@ -39,6 +39,7 @@ func stop(_ js.Value, args []js.Value) any {
 
 type platformOptions struct {
 	httpListenerTransport js.Value
+	os                    js.Value
 }
 
 type runOptions struct {
@@ -64,9 +65,12 @@ func parseRunOptions(opts js.Value) runOptions {
 
 func parsePlatformOptions(value js.Value) platformOptions {
 	if value.Type() != js.TypeObject || value.IsNull() {
-		return platformOptions{httpListenerTransport: js.Undefined()}
+		return platformOptions{httpListenerTransport: js.Undefined(), os: js.Undefined()}
 	}
-	return platformOptions{httpListenerTransport: value.Get("httpListenerTransport")}
+	return platformOptions{
+		httpListenerTransport: value.Get("httpListenerTransport"),
+		os:                    value.Get("os"),
+	}
 }
 
 func getWorkingDir(fsys fs.FS, p string) string {
@@ -148,7 +152,7 @@ func run(_ js.Value, args []js.Value) any {
 		}
 
 		cwd := getWorkingDir(fsys, runPath)
-		pal := newPal(cwd, fsys, stdout, stderr, signals, opts.platform.httpListenerTransport)
+		pal := newPal(cwd, fsys, stdout, stderr, signals, opts.platform.httpListenerTransport, opts.platform.os)
 		rt := runtime.NewRuntime(pal, result.Project().Environment().TypeEnv())
 		if !activeRunContext.setRuntime(signalSource, rt) {
 			fmt.Fprintln(stderr, "error: failed to register the Ballerina runtime")

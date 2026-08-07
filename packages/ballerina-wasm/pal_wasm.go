@@ -287,7 +287,7 @@ func (f *palFS) appendFile(p string, data []byte) error {
 	return f.fsys.WriteFile(resolvedPath, append(current, data...), 0o644)
 }
 
-func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.SignalSource, httpListenerTransport js.Value) pal.Platform {
+func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.SignalSource, httpListenerTransport, osProxy js.Value) pal.Platform {
 	palFS := &palFS{cwd: cwd, fsys: fsys}
 
 	return pal.Platform{
@@ -300,6 +300,7 @@ func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.Si
 			WriteFile:  palFS.writeFile,
 			AppendFile: palFS.appendFile,
 		},
+		OS: newPalOS(osProxy),
 		HTTP: pal.HTTP{
 			NewClient: func(cfg pal.ClientConfig) pal.HTTPClient {
 				return &fetchHTTPClient{cfg: cfg}

@@ -66,6 +66,18 @@ describe("Ballerina", () => {
 		expect(core.calls[0]?.options?.colors).toBe(false);
 	});
 
+	it("passes environment defaults and per-run overrides to the core", async () => {
+		const defaultEnv = new Map([["DEFAULT", "one"]]);
+		const runEnv = new Map([["RUN", "two"]]);
+		const { ballerina, core } = createBallerina({ env: defaultEnv });
+
+		await ballerina.run("main.bal");
+		await ballerina.run("main.bal", { env: runEnv });
+
+		expect(core.calls[0]?.options?.env).toBe(defaultEnv);
+		expect(core.calls[1]?.options?.env).toBe(runEnv);
+	});
+
 	it("overrides defaults with per-run options", async () => {
 		const stdout = { write: () => {} };
 		const { ballerina, core } = createBallerina({

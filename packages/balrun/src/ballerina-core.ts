@@ -1,5 +1,6 @@
 import type { FS } from "./fs/core";
 import type { HTTPDispatchRequest, HTTPListenerReady, HTTPListenerResponse } from "./http-listener";
+import type { Environment } from "./os";
 
 export type StreamWriter = {
 	write: (chunk: string) => void;
@@ -11,6 +12,8 @@ export interface BallerinaRunOptions {
 	stdout?: StreamWriter;
 	stderr?: StreamWriter;
 	onListenerReady?: (listener: HTTPListenerReady) => void;
+	/** Environment exposed to Ballerina when running in a browser. */
+	env?: Environment;
 }
 
 export type BallerinaRunResult = number;
