@@ -14,13 +14,14 @@ import type {
 	HTTPListenerRequest,
 	HTTPListenerResponse,
 } from "./http-listener";
+import type { OSPlatform } from "./os";
 import type { FS } from "./fs/core";
 
 const NODE_FS_PROMISES_MODULE = "node:fs/promises";
 
 interface WasmPlatform {
 	httpListenerTransport: HTTPListenerTransport;
-	os: ReturnType<typeof createOSPlatform>;
+	os: OSPlatform;
 }
 
 interface WasmRunOptions extends BallerinaRunOptions {

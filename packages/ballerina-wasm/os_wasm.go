@@ -133,10 +133,22 @@ func (p *palProcess) ReadStderr() ([]byte, error) {
 }
 
 func (p *palProcess) Kill() {
+	if p.proxy.Type() != js.TypeObject || p.proxy.IsNull() {
+		return
+	}
+	if fn := p.proxy.Get("kill"); fn.Type() != js.TypeFunction {
+		return
+	}
 	p.proxy.Call("kill")
 }
 
 func (p *palProcess) call(method string) (js.Value, error) {
+	if p.proxy.Type() != js.TypeObject || p.proxy.IsNull() {
+		return js.Undefined(), fmt.Errorf("process handle is unavailable")
+	}
+	if fn := p.proxy.Get(method); fn.Type() != js.TypeFunction {
+		return js.Undefined(), fmt.Errorf("process handle does not implement %q", method)
+	}
 	return awaitPromise(p.proxy.Call(method))
 }
 

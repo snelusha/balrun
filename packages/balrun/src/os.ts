@@ -29,7 +29,11 @@ export function createOSPlatform(environment?: Environment): OSPlatform {
 }
 
 class BrowserOSPlatform implements OSPlatform {
-	constructor(private environment: Environment = new Map()) {}
+	private environment: Environment;
+
+	constructor(environment: Environment = new Map()) {
+		this.environment = new Map(environment);
+	}
 
 	async getEnv(name: string): Promise<string> {
 		return this.environment.get(name) ?? "";
@@ -47,15 +51,15 @@ class BrowserOSPlatform implements OSPlatform {
 		return Object.fromEntries(this.environment);
 	}
 
-	getUsername(): Promise<string> {
+	async getUsername(): Promise<string> {
 		return unsupportedOS();
 	}
 
-	getUserHome(): Promise<string> {
+	async getUserHome(): Promise<string> {
 		return unsupportedOS();
 	}
 
-	exec(): Promise<ProcessPlatform> {
+	async exec(): Promise<ProcessPlatform> {
 		return unsupportedOS();
 	}
 }

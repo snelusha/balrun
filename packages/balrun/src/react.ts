@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 
 import type { BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
 import type { BallerinaOptions } from "./ballerina";
+import type { Environment } from "./os";
 
 export interface BallerinaContextValue {
 	isReady: boolean;
@@ -26,6 +27,8 @@ const BallerinaContext = createContext<BallerinaContextValue | null>(null);
 
 export interface BallerinaProviderProps extends BallerinaOptions {
 	children?: ReactNode;
+	/** Keep this map reference stable by memoizing or hoisting it to avoid reinitializing the runtime. */
+	env?: Environment;
 }
 
 export function BallerinaProvider({ children, ...options }: BallerinaProviderProps) {

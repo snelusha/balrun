@@ -130,11 +130,14 @@ See [`examples/memfs`](https://github.com/snelusha/balrun/tree/main/examples/mem
 
 ### `env`
 
-In browsers, Ballerina's environment-variable operations use the supplied map. Mutations made through `os:setEnv` and `os:unsetEnv` are reflected in the same map. User and home-directory lookups and subprocess execution are unavailable in browsers and panic when called. Node.js and Bun use the host environment and support all OS operations, including `os:exec`.
+In browsers, Ballerina's environment-variable operations use a copy of the supplied map for each run. User and home-directory lookups and subprocess execution are unavailable in browsers and panic when called. Node.js and Bun use the host environment and support all OS operations, including `os:exec`.
 
 ```ts
+import { Ballerina } from "@snelusha/balrun";
+import { NodeFS } from "@snelusha/balrun/fs/node";
+
 const env = new Map([["GREETING", "hello"]]);
-await new Ballerina({ fs, env }).run("main.bal");
+await new Ballerina({ fs: new NodeFS(), env }).run("main.bal");
 ```
 
 ### HTTP services
