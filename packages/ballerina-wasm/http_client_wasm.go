@@ -81,10 +81,20 @@ func readRequestBody(method string, body io.Reader) ([]byte, error) {
 }
 
 func (c *fetchHTTPClient) buildFetchOptions(ctx context.Context, method string, body []byte, contentType string, reqHeaders map[string][]string, reqCtx *requestContext) (map[string]any, error) {
+	redirect, err := c.getRedirectMode()
+	if err != nil {
+		return nil, err
+	}
+
+	headers, err := c.buildHeaders(contentType, reqHeaders)
+	if err != nil {
+		return nil, err
+	}
+
 	options := map[string]any{
 		"method":   method,
-		"headers":  c.buildHeaders(contentType, reqHeaders),
-		"redirect": c.getRedirectMode(),
+		"headers":  headers,
+		"redirect": redirect,
 	}
 
 	if body != nil {
@@ -107,31 +117,48 @@ func methodAllowsBody(method string) bool {
 	return method != "GET" && method != "HEAD"
 }
 
-func (c *fetchHTTPClient) getRedirectMode() string {
-	if c.cfg.FollowRedirects.Enabled {
-		return "follow"
+func (c *fetchHTTPClient) getRedirectMode() (string, error) {
+	if !c.cfg.FollowRedirects.Enabled {
+		return "", fmt.Errorf("disabling redirects is not supported in WebAssembly: Fetch manual mode hides redirect response metadata")
 	}
-	return "manual"
+	return "follow", nil
 }
 
-func (c *fetchHTTPClient) buildHeaders(contentType string, reqHeaders map[string][]string) js.Value {
+func (c *fetchHTTPClient) buildHeaders(contentType string, reqHeaders map[string][]string) (js.Value, error) {
 	headers := js.Global().Get("Headers").New()
 
 	for name, values := range reqHeaders {
 		if len(values) == 0 {
 			continue
 		}
-		headers.Call("set", name, values[0])
+		if err := callHeadersMethod(headers, "set", name, values[0]); err != nil {
+			return js.Undefined(), err
+		}
 		for _, value := range values[1:] {
-			headers.Call("append", name, value)
+			if err := callHeadersMethod(headers, "append", name, value); err != nil {
+				return js.Undefined(), err
+			}
 		}
 	}
 
 	if contentType != "" {
-		headers.Call("set", "Content-Type", contentType)
+		if err := callHeadersMethod(headers, "set", "Content-Type", contentType); err != nil {
+			return js.Undefined(), err
+		}
 	}
 
-	return headers
+	return headers, nil
+}
+
+func callHeadersMethod(headers js.Value, method, name, value string) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("failed to %s header %q: %v", method, name, recovered)
+		}
+	}()
+
+	headers.Call(method, name, value)
+	return nil
 }
 
 func (c *fetchHTTPClient) encodeBody(body []byte) js.Value {
@@ -194,28 +221,44 @@ func (c *fetchHTTPClient) extractHeaders(resp js.Value) map[string][]string {
 
 func (c *fetchHTTPClient) extractBody(resp js.Value) ([]byte, error) {
 	limit := c.cfg.ResponseLimits.MaxEntityBodySize
+	stream := resp.Get("body")
+	if !stream.Truthy() {
+		return []byte{}, nil
+	}
+
+	reader := stream.Call("getReader")
 	if limit >= 0 {
 		contentLength := resp.Get("headers").Call("get", "Content-Length")
 		if contentLength.Truthy() {
 			length, err := strconv.ParseInt(contentLength.String(), 10, 64)
 			if err == nil && length > limit {
+				reader.Call("cancel")
 				return nil, fmt.Errorf("response entity body size exceeds: %d bytes", limit)
 			}
 		}
 	}
 
-	arrayBuffer, err := awaitPromise(resp.Call("arrayBuffer"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
+	var body bytes.Buffer
+	var bodyLen int64
+	for {
+		chunk, err := awaitPromise(reader.Call("read"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", err)
+		}
+		if chunk.Get("done").Bool() {
+			return body.Bytes(), nil
+		}
 
-	uint8Array := js.Global().Get("Uint8Array").New(arrayBuffer)
-	bodyLen := uint8Array.Get("byteLength").Int()
-	if limit >= 0 && int64(bodyLen) > limit {
-		return nil, fmt.Errorf("response entity body size exceeds: %d bytes", limit)
-	}
+		value := chunk.Get("value")
+		chunkLen := int64(value.Get("byteLength").Int())
+		if limit >= 0 && chunkLen > limit-bodyLen {
+			reader.Call("cancel")
+			return nil, fmt.Errorf("response entity body size exceeds: %d bytes", limit)
+		}
 
-	body := make([]byte, bodyLen)
-	js.CopyBytesToGo(body, uint8Array)
-	return body, nil
+		data := make([]byte, int(chunkLen))
+		js.CopyBytesToGo(data, value)
+		body.Write(data)
+		bodyLen += chunkLen
+	}
 }

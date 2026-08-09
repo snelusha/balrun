@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path"
 	"sync"
+	"syscall"
 )
 
 type palFS struct {
@@ -25,7 +26,7 @@ func (f *palFS) createParentDirs(p string) error {
 	info, err := fs.Stat(f.fsys, dir)
 	if err == nil {
 		if !info.IsDir() {
-			return &fs.PathError{Op: "mkdirAll", Path: dir, Err: fs.ErrInvalid}
+			return &fs.PathError{Op: "mkdirAll", Path: dir, Err: syscall.ENOTDIR}
 		}
 		return nil
 	}
