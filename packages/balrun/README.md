@@ -49,21 +49,21 @@ import { BallerinaProvider, useBallerina } from "@snelusha/balrun/react";
 const fs = new SomeFS();
 
 function App() {
-	return (
-		<BallerinaProvider fs={fs}>
-			<RunButton />
-		</BallerinaProvider>
-	);
+  return (
+    <BallerinaProvider fs={fs}>
+      <RunButton />
+    </BallerinaProvider>
+  );
 }
 
 function RunButton() {
-	const { isReady, error, run } = useBallerina();
+  const { isReady, error, run } = useBallerina();
 
-	return (
-		<button disabled={!isReady} onClick={() => run("./main.bal")}>
-			{error ? error.message : "Run Ballerina"}
-		</button>
-	);
+  return (
+    <button disabled={!isReady} onClick={() => run("./main.bal")}>
+      {error ? error.message : "Run Ballerina"}
+    </button>
+  );
 }
 ```
 
@@ -94,9 +94,9 @@ import { Ballerina, type StreamWriter } from "@snelusha/balrun";
 
 const buffer: string[] = [];
 const writer: StreamWriter = {
-	write(chunk) {
-		buffer.push(chunk);
-	},
+  write(chunk) {
+    buffer.push(chunk);
+  },
 };
 
 await new Ballerina({ stdout: writer, stderr: writer }).run("./main.bal");
@@ -110,8 +110,8 @@ await new Ballerina({ stdout: writer, stderr: writer }).run("./main.bal");
 import { Ballerina, type FS } from "@snelusha/balrun";
 
 class MemFS implements FS {
-	// When running a single file, only `open` and `stat` are required.
-	// When running a package, `readDir` is also required.
+  // When running a single file, only `open` and `stat` are required.
+  // When running a package, `readDir` is also required.
 }
 
 await new Ballerina({ fs: new MemFS() }).run("main.bal");
@@ -146,11 +146,11 @@ Node.js and Bun bind Ballerina HTTP listeners to a local socket. Browsers cannot
 
 ```ts
 const running = ballerina.run("service.bal", {
-	onListenerReady: async ({ host, port }) => {
-		const response = await ballerina.dispatchHttpRequest({ host, port, path: "/ping" });
-		console.log(new TextDecoder().decode(response.body));
-		await ballerina.stop();
-	},
+  onListenerReady: async ({ host, port }) => {
+    const response = await ballerina.dispatchHttpRequest({ host, port, path: "/ping" });
+    console.log(new TextDecoder().decode(response.body));
+    await ballerina.stop();
+  },
 });
 await running;
 ```
