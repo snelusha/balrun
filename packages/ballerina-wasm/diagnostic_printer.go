@@ -1,8 +1,8 @@
 package main
 
 import (
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/tools/diagnostics"
+	"ballerina/projects"
+	"ballerina/tools/diagnostics"
 	"fmt"
 	"io"
 	"io/fs"

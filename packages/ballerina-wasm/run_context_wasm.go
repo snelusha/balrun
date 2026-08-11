@@ -1,8 +1,8 @@
 package main
 
 import (
-	"ballerina-lang-go/platform/pal"
-	"ballerina-lang-go/runtime"
+	"ballerina/platform/pal"
+	"ballerina/runtime"
 	"fmt"
 	"net/http"
 	"sync"

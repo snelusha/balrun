@@ -1,11 +1,11 @@
 package main
 
 import (
-	_ "ballerina-lang-go/lib/rt"
-	"ballerina-lang-go/platform/pal"
-	"ballerina-lang-go/projects"
-	"ballerina-lang-go/runtime"
-	"ballerina-lang-go/tools/diagnostics"
+	_ "ballerina/lib/rt"
+	"ballerina/platform/pal"
+	"ballerina/projects"
+	"ballerina/runtime"
+	"ballerina/tools/diagnostics"
 	"fmt"
 	"io"
 	"io/fs"
