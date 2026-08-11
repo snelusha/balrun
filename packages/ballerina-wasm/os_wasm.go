@@ -1,7 +1,7 @@
 package main
 
 import (
-	"ballerina-lang-go/platform/pal"
+	"ballerina/platform/pal"
 	"errors"
 	"fmt"
 	"syscall/js"
