@@ -71,6 +71,8 @@ export class WasmBridge implements BallerinaCore {
 
 	async run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
 		if (path === "") return Promise.reject(new Error("[balrun]: run path must not be empty."));
+		if (path.startsWith("/") && !proxy.supportsAbsolutePaths)
+			return Promise.reject(new Error("[balrun]: filesystem does not support absolute run paths."));
 		if (this.activeRun) return Promise.reject(new Error("[balrun]: a run is already active."));
 		const { onListenerReady, ...runOptions } = options ?? {};
 		this.activeRun = true;

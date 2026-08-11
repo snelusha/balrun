@@ -21,6 +21,8 @@ export type DirEntry = {
  * Filesystem contract exposed to the Ballerina runtime.
  */
 export interface FS {
+	/** Whether this filesystem accepts absolute paths. Defaults to false. */
+	readonly supportsAbsolutePaths?: boolean;
 	open(path: string): Promise<OpenResult | null>;
 	stat(path: string): Promise<StatResult | null>;
 	readDir(path: string): Promise<DirEntry[] | null>;
