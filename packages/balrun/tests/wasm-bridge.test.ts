@@ -77,6 +77,12 @@ describe("WasmBridge", () => {
 			);
 		});
 
+		it("rejects absolute run paths for filesystems that do not support them", async () => {
+			expect(bridge.run(new MemFS({}), "/main.bal")).rejects.toThrow(
+				"[balrun]: filesystem does not support absolute run paths.",
+			);
+		});
+
 		it("rejects concurrent runs", async () => {
 			const isolatedBridge = new WasmBridge();
 			let resolveRun: (result: number) => void = () => {};

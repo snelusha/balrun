@@ -6,6 +6,8 @@ const NODE_FS_PROMISES_MODULE = "node:fs/promises";
  * Node.js filesystem implementation for the Ballerina runtime.
  */
 export class NodeFS implements FS {
+	readonly supportsAbsolutePaths = true;
+
 	async open(path: string): Promise<OpenResult | null> {
 		try {
 			const fs = await nodeFs();
