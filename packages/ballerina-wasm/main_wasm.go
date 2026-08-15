@@ -162,7 +162,7 @@ func run(_ js.Value, args []js.Value) any {
 
 		for _, birPkg := range birPkgs {
 			if err := rt.Init(*birPkg); err != nil {
-				fmt.Fprintf(stderr, "error: %v\n", err)
+				fmt.Fprintln(stderr, err)
 				resolve.Invoke(1)
 				return
 			}
