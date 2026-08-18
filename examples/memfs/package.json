@@ -7,9 +7,9 @@
 		"@snelusha/balrun": "workspace:*"
 	},
 	"devDependencies": {
-		"@types/bun": "1.3.13"
+		"@types/bun": "1.3.14"
 	},
 	"peerDependencies": {
-		"typescript": "^6.0.3"
+		"typescript": "^7.0.2"
 	}
 }
