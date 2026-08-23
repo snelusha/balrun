@@ -19,7 +19,16 @@ export interface BallerinaRunOptions {
 export type BallerinaRunResult = number;
 export type BallerinaStopMode = "graceful" | "immediate";
 
+/** Identifies the interpreter compiled into the loaded WASM binary. */
+export interface BallerinaInterpreterVersion {
+	/** Exact upstream release tag, or null when the interpreter was built from an untagged commit. */
+	version: string | null;
+	/** Full Git commit SHA of the upstream interpreter source. */
+	commit: string;
+}
+
 export interface BallerinaCore {
+	getInterpreterVersion(): BallerinaInterpreterVersion;
 	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult>;
 	stop(mode: BallerinaStopMode): boolean;
 	dispatchHttpRequest(request: HTTPDispatchRequest): Promise<HTTPListenerResponse>;

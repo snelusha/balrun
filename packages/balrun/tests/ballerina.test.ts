@@ -5,6 +5,7 @@ import { MemFS } from "./memfs";
 
 import type {
 	BallerinaCore,
+	BallerinaInterpreterVersion,
 	BallerinaRunOptions,
 	BallerinaStopMode,
 } from "../src/ballerina-core.ts";
@@ -15,6 +16,14 @@ import type { HTTPDispatchRequest, HTTPListenerResponse } from "../src/http-list
 class SpyCore implements BallerinaCore {
 	calls: Array<{ fs: FS; path: string; options?: BallerinaRunOptions }> = [];
 	signals: string[] = [];
+	version: BallerinaInterpreterVersion = {
+		version: "v0.6.0",
+		commit: "c5ce6e641c21d9ad2f438e42c90042d7fc39b392",
+	};
+
+	getInterpreterVersion() {
+		return this.version;
+	}
 
 	async run(fs: FS, path: string, options?: BallerinaRunOptions) {
 		this.calls.push({ fs, path, options });
@@ -45,6 +54,12 @@ describe("Ballerina", () => {
 			core,
 		};
 	}
+
+	it("returns the loaded core's interpreter version", async () => {
+		const { ballerina, core } = createBallerina();
+
+		expect(await ballerina.getInterpreterVersion()).toEqual(core.version);
+	});
 
 	it("uses default run options", async () => {
 		const { ballerina, core } = createBallerina();

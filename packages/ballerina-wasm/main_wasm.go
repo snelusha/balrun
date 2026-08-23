@@ -6,6 +6,8 @@ import (
 	"ballerina/projects"
 	"ballerina/runtime"
 	"ballerina/tools/diagnostics"
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,12 +16,40 @@ import (
 	"syscall/js"
 )
 
+//go:embed interpreter.json
+var interpreterVersionJSON []byte
+
+type interpreterVersion struct {
+	Version *string `json:"version"`
+	Commit  string  `json:"commit"`
+}
+
+var version interpreterVersion
+
+func init() {
+	if err := json.Unmarshal(interpreterVersionJSON, &version); err != nil {
+		panic(fmt.Sprintf("invalid embedded interpreter version: %v", err))
+	}
+}
+
 func main() {
+	js.Global().Set("getInterpreterVersion", js.FuncOf(getInterpreterVersion))
 	js.Global().Set("run", js.FuncOf(run))
 	js.Global().Set("stop", js.FuncOf(stop))
 
 	js.Global().Set("dispatchHttpRequest", js.FuncOf(dispatchHTTPRequest))
 	select {}
+}
+
+func getInterpreterVersion(_ js.Value, _ []js.Value) any {
+	var tag any
+	if version.Version != nil {
+		tag = *version.Version
+	}
+	return js.ValueOf(map[string]any{
+		"version": tag,
+		"commit":  version.Commit,
+	})
 }
 
 func stop(_ js.Value, args []js.Value) any {

@@ -4,6 +4,7 @@ import type { FS } from "./fs/core";
 import type { HTTPDispatchRequest, HTTPListenerResponse } from "./http-listener";
 import type {
 	BallerinaCore,
+	BallerinaInterpreterVersion,
 	BallerinaRunOptions,
 	BallerinaRunResult,
 	BallerinaStopMode,
@@ -83,6 +84,11 @@ export class Ballerina {
 		const fs = new NodeFS();
 		this._fs = fs;
 		return fs;
+	}
+
+	/** Returns the identity of the interpreter compiled into the loaded WASM binary. */
+	async getInterpreterVersion(): Promise<BallerinaInterpreterVersion> {
+		return (await this.bridge()).getInterpreterVersion();
 	}
 
 	async run(path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {

@@ -60,6 +60,25 @@ function fixturePath(name: string): string {
 }
 
 describe("CLI", () => {
+	it("prints the balrun package version", async () => {
+		const result = await runCli(["--version"]);
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toBe("balrun 0.6.1\n");
+		expect(result.stderr).toBe("");
+	});
+
+	it("prints the interpreter version", async () => {
+		const result = await runCli(["--interpreter-version"]);
+
+		expect(result.exitCode).toBe(0);
+		expect(JSON.parse(result.stdout)).toEqual({
+			version: "v0.6.0",
+			commit: "c5ce6e641c21d9ad2f438e42c90042d7fc39b392",
+		});
+		expect(result.stderr).toBe("");
+	});
+
 	it("prints usage and exits 1 when no path is provided", async () => {
 		const result = await runCli([]);
 

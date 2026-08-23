@@ -1,5 +1,6 @@
 import type {
 	BallerinaCore,
+	BallerinaInterpreterVersion,
 	BallerinaRunOptions,
 	BallerinaRunResult,
 	BallerinaStopMode,
@@ -29,6 +30,7 @@ interface WasmRunOptions extends BallerinaRunOptions {
 }
 
 export interface WasmExports {
+	getInterpreterVersion(): BallerinaInterpreterVersion;
 	run(proxy: FS, path: string, options?: WasmRunOptions): Promise<BallerinaRunResult>;
 	stop: (mode: BallerinaStopMode) => boolean;
 	dispatchHttpRequest: (
@@ -67,6 +69,10 @@ export class WasmBridge implements BallerinaCore {
 		// FIXME: `stop()` conflicts with DOM `window.stop()`
 		bridge.exports = { ...globalThis } as unknown as WasmExports;
 		return bridge;
+	}
+
+	getInterpreterVersion(): BallerinaInterpreterVersion {
+		return this.exports.getInterpreterVersion();
 	}
 
 	async run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {

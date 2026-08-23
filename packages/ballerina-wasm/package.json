@@ -2,7 +2,7 @@
 	"name": "ballerina-wasm",
 	"private": true,
 	"scripts": {
-		"build": "GOOS=js GOARCH=wasm go build -o dist/ballerina.wasm .",
+		"build": "bun ../../scripts/validate-interpreter-version.ts && GOOS=js GOARCH=wasm go build -o dist/ballerina.wasm .",
 		"clean": "git clean -xdf .turbo dist"
 	}
 }

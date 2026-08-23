@@ -15,6 +15,13 @@ describe("WasmBridge", () => {
 		bridge = await WasmBridge.load(WASM_PATH);
 	});
 
+	it("returns the interpreter version embedded in the WASM binary", () => {
+		expect(bridge.getInterpreterVersion()).toEqual({
+			version: "v0.6.0",
+			commit: "c5ce6e641c21d9ad2f438e42c90042d7fc39b392",
+		});
+	});
+
 	describe("load", () => {
 		it("loads the WASM from a file path", async () => {
 			const bridge = await WasmBridge.load(WASM_PATH);

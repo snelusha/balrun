@@ -17,6 +17,8 @@ npx @snelusha/balrun ./main.bal
 
 Accepts a `.bal` file, a package directory, or `.` for the current package.
 
+Use `balrun --version` for the balrun package version and `balrun --interpreter-version` for JSON containing the embedded interpreter release tag and commit.
+
 ## Usage
 
 ```ts
@@ -27,6 +29,17 @@ const exitCode = await ballerina.run("./main.bal", { colors: true });
 ```
 
 Options passed to `run()` override the constructor defaults for that call only.
+
+### Interpreter version
+
+`getInterpreterVersion()` identifies the interpreter compiled into the loaded WASM binary. This also reflects a custom `wasmSource` or `core`.
+
+```ts
+const interpreter = await ballerina.getInterpreterVersion();
+// { version: "v0.6.0", commit: "c5ce6e641c21d9ad2f438e42c90042d7fc39b392" }
+```
+
+`version` is `null` for an untagged interpreter build; `commit` is always its full source commit SHA.
 
 ## Stopping a run
 

@@ -7,6 +7,7 @@ export type { BallerinaOptions } from "./ballerina";
 export type { Environment } from "./os";
 export type {
 	BallerinaCore,
+	BallerinaInterpreterVersion,
 	BallerinaRunOptions,
 	BallerinaRunResult,
 	BallerinaStopMode,
