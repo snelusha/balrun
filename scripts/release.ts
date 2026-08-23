@@ -68,6 +68,7 @@ async function release() {
 	}
 
 	const files = await updatePackageVersions(newVersion);
+	await $`bun run format -- ${files}`;
 	await $`git add ${files}`;
 
 	const commit = `chore: release v${newVersion}`;
