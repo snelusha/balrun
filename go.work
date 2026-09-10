@@ -1,0 +1,8 @@
+go 1.27
+
+toolchain go1.27.1
+
+use (
+	./packages/ballerina-wasm
+	./packages/ballerina-wasm/ballerina
+)

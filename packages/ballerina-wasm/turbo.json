@@ -2,14 +2,10 @@
 	"extends": ["//"],
 	"tasks": {
 		"build": {
+			"dependsOn": [],
+			"command": ["env", "GOOS=js", "GOARCH=wasm", "go", "build", "-o", "dist/ballerina.wasm", "."],
 			"env": ["LocalAppData"],
-			"inputs": [
-				"**/*.go",
-				"go.mod",
-				"go.sum",
-				"../../.git/modules/packages/ballerina-wasm/ballerina/HEAD"
-			],
-			"outputs": ["dist/**"]
+			"outputs": ["dist/ballerina.wasm"]
 		}
 	}
 }
