@@ -1,9 +1,9 @@
 package main
 
 import (
-	"ballerina/projects"
-	"ballerina/tools/diagnostics"
 	"fmt"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 	"io"
 	"io/fs"
 	"path"
