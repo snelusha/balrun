@@ -11,6 +11,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Release
@@ -70,12 +74,18 @@ jobs:
           echo "Using npm tag: $NPM_TAG"
 
       - name: Pack
+        id: pack
         working-directory: packages/balrun
-        run: bun pm pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/npm-release"
+          mkdir -p "$artifact_dir"
+          tarball="$(bun pm pack --destination "$artifact_dir" --quiet)"
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm
-        working-directory: packages/balrun
-        run: npm publish --access public --provenance --tag ${{ steps.npm_tag.outputs.npm_tag }} *.tgz
+        run: npm publish ${{ steps.pack.outputs.tarball }} --access public --provenance --tag ${{ steps.npm_tag.outputs.npm_tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
