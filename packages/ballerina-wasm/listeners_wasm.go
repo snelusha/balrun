@@ -1,9 +1,9 @@
 package main
 
 import (
-	"ballerina/platform/pal"
 	"context"
 	"fmt"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 	"net"
 	"net/http"
 	"strconv"
