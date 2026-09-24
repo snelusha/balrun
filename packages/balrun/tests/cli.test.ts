@@ -2,6 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { fileURLToPath } from "node:url";
 
 const CLI_PATH = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
+const { version: BALRUN_VERSION } = JSON.parse(
+	await Bun.file(new URL("../package.json", import.meta.url)).text(),
+) as { version: string };
 
 async function runCli(args: string[], signal?: NodeJS.Signals) {
 	const proc = Bun.spawn([process.execPath, CLI_PATH, ...args], {
@@ -65,8 +68,9 @@ describe("CLI", () => {
 			const result = await runCli([flag]);
 
 			expect(result.exitCode).toBe(0);
+			expect(result.stdout).toStartWith(`balrun ${BALRUN_VERSION}\n`);
 			expect(result.stdout).toMatch(
-				/^balrun 0\.6\.1\nballerina-nutcracker v\d+\.\d+\.\d+ \([0-9a-f]{40}\)\n$/,
+				/^balrun [^\n]+\nballerina-nutcracker v\d+\.\d+\.\d+ \([0-9a-f]{40}\)\n$/,
 			);
 			expect(result.stderr).toBe("");
 		});
