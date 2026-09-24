@@ -70,6 +70,15 @@ describe("WasmBridge", () => {
 		});
 	});
 
+	describe("version", () => {
+		it("reports the embedded interpreter version and revision", async () => {
+			expect(await bridge.version()).toMatchObject({
+				version: expect.stringMatching(/^v\d+\.\d+\.\d+$/),
+				revision: expect.stringMatching(/^[0-9a-f]{40}$/),
+			});
+		});
+	});
+
 	describe("run", () => {
 		it("throws when run path is empty", async () => {
 			expect(bridge.run(new MemFS({}), "")).rejects.toThrow(
