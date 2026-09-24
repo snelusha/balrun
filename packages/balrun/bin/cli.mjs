@@ -2,13 +2,27 @@
 
 import { Ballerina } from "../dist/index.mjs";
 
-const path = process.argv[2];
+const argument = process.argv[2];
 
-if (!path) {
-	process.stderr.write("usage: balrun [<source-file.bal> | <package-dir> | .]\n");
+if (argument === "--version" || argument === "-v") {
+	try {
+		const version = await new Ballerina().version();
+		process.stdout.write(
+			`balrun ${version.balrun}\nballerina-nutcracker ${version.interpreter.version} (${version.interpreter.revision})\n`,
+		);
+		process.exit(0);
+	} catch (error) {
+		process.stderr.write(`${error}\n`);
+		process.exit(1);
+	}
+}
+
+if (!argument) {
+	process.stderr.write("usage: balrun [--version | -v | <source-file.bal> | <package-dir> | .]\n");
 	process.exit(1);
 }
 
+const path = argument;
 const keepAlive = setInterval(() => {}, 1_000);
 
 const ballerina = new Ballerina({

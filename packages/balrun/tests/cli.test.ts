@@ -60,6 +60,18 @@ function fixturePath(name: string): string {
 }
 
 describe("CLI", () => {
+	for (const flag of ["--version", "-v"]) {
+		it(`prints version information with ${flag}`, async () => {
+			const result = await runCli([flag]);
+
+			expect(result.exitCode).toBe(0);
+			expect(result.stdout).toMatch(
+				/^balrun 0\.6\.1\nballerina-nutcracker v\d+\.\d+\.\d+ \([0-9a-f]{40}\)\n$/,
+			);
+			expect(result.stderr).toBe("");
+		});
+	}
+
 	it("prints usage and exits 1 when no path is provided", async () => {
 		const result = await runCli([]);
 
