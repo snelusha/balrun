@@ -47,6 +47,11 @@
     },
     "packages/ballerina-wasm": {
       "name": "ballerina-wasm",
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
     },
     "packages/balrun": {
       "name": "@snelusha/balrun",

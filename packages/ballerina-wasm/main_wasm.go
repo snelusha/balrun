@@ -14,12 +14,25 @@ import (
 	"syscall/js"
 )
 
+var (
+	interpreterVersion  = "dev"
+	interpreterRevision = "unknown"
+)
+
 func main() {
 	js.Global().Set("run", js.FuncOf(run))
 	js.Global().Set("stop", js.FuncOf(stop))
+	js.Global().Set("version", js.FuncOf(version))
 
 	js.Global().Set("dispatchHttpRequest", js.FuncOf(dispatchHTTPRequest))
 	select {}
+}
+
+func version(_ js.Value, _ []js.Value) any {
+	value := js.Global().Get("Object").New()
+	value.Set("version", interpreterVersion)
+	value.Set("revision", interpreterRevision)
+	return value
 }
 
 func stop(_ js.Value, args []js.Value) any {

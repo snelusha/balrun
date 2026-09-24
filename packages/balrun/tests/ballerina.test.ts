@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { Ballerina } from "../src/ballerina.ts";
+import { BALRUN_VERSION } from "../src/version.ts";
 import { MemFS } from "./memfs";
 
 import type {
@@ -15,6 +16,10 @@ import type { HTTPDispatchRequest, HTTPListenerResponse } from "../src/http-list
 class SpyCore implements BallerinaCore {
 	calls: Array<{ fs: FS; path: string; options?: BallerinaRunOptions }> = [];
 	signals: string[] = [];
+
+	async version() {
+		return { version: "dev", revision: "unknown" };
+	}
 
 	async run(fs: FS, path: string, options?: BallerinaRunOptions) {
 		this.calls.push({ fs, path, options });
@@ -89,6 +94,18 @@ describe("Ballerina", () => {
 			colors: true,
 			stdout: stdout,
 			stderr: undefined,
+		});
+	});
+
+	it("reports the package and interpreter versions", async () => {
+		const { ballerina } = createBallerina();
+
+		expect(await ballerina.version()).toEqual({
+			balrun: BALRUN_VERSION,
+			interpreter: {
+				version: "dev",
+				revision: "unknown",
+			},
 		});
 	});
 
