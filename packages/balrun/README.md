@@ -17,6 +17,12 @@ npx @snelusha/balrun ./main.bal
 
 Accepts a `.bal` file, a package directory, or `.` for the current package.
 
+Print the package and embedded interpreter provenance with:
+
+```bash
+npx @snelusha/balrun --version
+```
+
 ## Usage
 
 ```ts
@@ -27,6 +33,17 @@ const exitCode = await ballerina.run("./main.bal", { colors: true });
 ```
 
 Options passed to `run()` override the constructor defaults for that call only.
+
+### Version information
+
+`BALRUN_VERSION` is the npm package version. `Ballerina#version()` also reports the version and Git revision embedded in the loaded interpreter WASM, which can differ when using `wasmSource` or `core`.
+
+```ts
+import { BALRUN_VERSION, Ballerina } from "@snelusha/balrun";
+
+console.log(BALRUN_VERSION);
+console.log(await new Ballerina().version());
+```
 
 ## Stopping a run
 
