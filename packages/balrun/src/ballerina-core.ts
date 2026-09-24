@@ -19,8 +19,19 @@ export interface BallerinaRunOptions {
 export type BallerinaRunResult = number;
 export type BallerinaStopMode = "graceful" | "immediate";
 
+export interface BallerinaInterpreterVersion {
+	version: string;
+	revision: string;
+}
+
+export interface BalrunVersion {
+	balrun: string;
+	interpreter: BallerinaInterpreterVersion;
+}
+
 export interface BallerinaCore {
 	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult>;
+	version(): Promise<BallerinaInterpreterVersion>;
 	stop(mode: BallerinaStopMode): boolean;
 	dispatchHttpRequest(request: HTTPDispatchRequest): Promise<HTTPListenerResponse>;
 }

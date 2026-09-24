@@ -1,11 +1,14 @@
 import { NodeFS } from "./fs/node";
 
+import { BALRUN_VERSION } from "./version";
+
 import type { FS } from "./fs/core";
 import type { HTTPDispatchRequest, HTTPListenerResponse } from "./http-listener";
 import type {
 	BallerinaCore,
 	BallerinaRunOptions,
 	BallerinaRunResult,
+	BalrunVersion,
 	BallerinaStopMode,
 } from "./ballerina-core";
 
@@ -92,6 +95,13 @@ export class Ballerina {
 			...this._defaults,
 			...options,
 		});
+	}
+
+	async version(): Promise<BalrunVersion> {
+		return {
+			balrun: BALRUN_VERSION,
+			interpreter: await (await this.bridge()).version(),
+		};
 	}
 
 	async stop(mode: BallerinaStopMode = "graceful"): Promise<boolean> {
