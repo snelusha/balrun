@@ -9,6 +9,11 @@
 			"dependsOn": ["^build"],
 			"outputs": []
 		},
+		"typecheck": {
+			"dependsOn": ["^typecheck"],
+			"inputs": ["src/**", "scripts/**", "tsconfig.json", "package.json"],
+			"outputs": []
+		},
 		"clean": {
 			"cache": false
 		}
