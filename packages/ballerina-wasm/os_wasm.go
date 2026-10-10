@@ -1,9 +1,9 @@
 package main
 
 import (
-	"ballerina/platform/pal"
 	"errors"
 	"fmt"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 	"syscall/js"
 )
 

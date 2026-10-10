@@ -1,9 +1,9 @@
 package main
 
 import (
-	"ballerina/common/bfs"
 	"bytes"
 	"errors"
+	"github.com/ballerina-nutcracker/ballerina/common/bfs"
 	"io"
 	"io/fs"
 	"path"
