@@ -180,6 +180,14 @@ By default, `Ballerina` loads the bundled `ballerina.wasm`. Pass `wasmSource` to
 await new Ballerina({ wasmSource: "https://example.com/ballerina.wasm" }).run("main.bal");
 ```
 
+`ballerina.wasm` is available as a standalone GitHub Release asset starting with v0.6.3. Pin the release version when loading it directly:
+
+```ts
+await new Ballerina({
+  wasmSource: "https://github.com/snelusha/balrun/releases/download/v0.6.3/ballerina.wasm",
+}).run("main.bal");
+```
+
 For custom loading, pass a `BallerinaCore` directly. `WasmBridge.load()` accepts a local path, URL, `Response`, or `Promise<Response>`:
 
 ```ts
