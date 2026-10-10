@@ -4,7 +4,7 @@
 	"scripts": {
 		"build": "bun scripts/build.ts",
 		"clean": "git clean -xdf .turbo dist",
-		"typecheck": "tsc"
+		"typecheck": "bun check"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
