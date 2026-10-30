@@ -1,8 +1,9 @@
 package main
 
 import (
-	"ballerina/platform/pal"
 	"sync"
+
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
 type signalSource struct {

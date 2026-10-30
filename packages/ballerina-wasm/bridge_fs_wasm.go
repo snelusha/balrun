@@ -1,7 +1,6 @@
 package main
 
 import (
-	"ballerina/common/bfs"
 	"bytes"
 	"errors"
 	"io"
@@ -9,6 +8,8 @@ import (
 	"path"
 	"syscall/js"
 	"time"
+
+	"github.com/ballerina-nutcracker/ballerina/common/bfs"
 )
 
 var (

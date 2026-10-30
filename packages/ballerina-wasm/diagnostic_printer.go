@@ -1,13 +1,14 @@
 package main
 
 import (
-	"ballerina/projects"
-	"ballerina/tools/diagnostics"
 	"fmt"
 	"io"
 	"io/fs"
 	"path"
 	"strings"
+
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
 type termStyle struct {
@@ -113,7 +114,8 @@ func printDiagnosticHeader(w io.Writer, s termStyle, d diagnostics.Diagnostic) {
 }
 
 func printDiagnosticLocation(w io.Writer, s termStyle, loc diagnosticLocation) {
-	fmt.Fprintf(w, "%*s%s %s:%d:%d\n",
+	fmt.Fprintf(
+		w, "%*s%s %s:%d:%d\n",
 		loc.numWidth, "", s.cyan("-->"), loc.filePath, loc.startLine+1, loc.startCol+1,
 	)
 	if loc.filePath != "" {

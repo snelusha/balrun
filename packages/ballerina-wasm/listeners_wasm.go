@@ -1,13 +1,14 @@
 package main
 
 import (
-	"ballerina/platform/pal"
 	"context"
 	"fmt"
 	"net"
 	"net/http"
 	"strconv"
 	"syscall/js"
+
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
 type wasmListenerHandle struct {

@@ -1,11 +1,12 @@
 package main
 
 import (
-	"ballerina/platform/pal"
 	"io"
 	"net/http"
 	"syscall/js"
 	"time"
+
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
 var processStart = time.Now()

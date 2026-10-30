@@ -1,11 +1,12 @@
 package main
 
 import (
-	"ballerina/platform/pal"
-	"ballerina/runtime"
 	"fmt"
 	"net/http"
 	"sync"
+
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
 )
 
 type runContext struct {
