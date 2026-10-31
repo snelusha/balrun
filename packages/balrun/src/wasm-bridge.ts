@@ -166,8 +166,11 @@ async function loadFromResponse(
 }
 
 function shouldFetch(source: string): boolean {
+	const isNodeRuntime =
+		typeof process !== "undefined" && typeof process.versions?.node === "string";
+
 	// In a browser environment, we can assume all string sources are URLs.
-	if (typeof window !== "undefined") return true;
+	if (!isNodeRuntime && typeof window !== "undefined") return true;
 	try {
 		const url = new URL(source);
 		return url.protocol === "http:" || url.protocol === "https:";
