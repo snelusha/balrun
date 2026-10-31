@@ -22,8 +22,8 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Fetch Ballerina tags
-        run: git -C packages/ballerina-wasm/ballerina fetch --tags
+      - name: Fetch Ballerina version metadata
+        run: git -C packages/ballerina-wasm/ballerina fetch --unshallow --tags
 
       - name: Set up Go
         uses: actions/setup-go@v7
