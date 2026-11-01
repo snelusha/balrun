@@ -1,10 +1,10 @@
 package main
 
 import (
-	"ballerina/platform/pal"
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 	"io"
 	"strconv"
 	"strings"

@@ -1,13 +1,14 @@
 package main
 
 import (
-	"ballerina/projects"
-	"ballerina/tools/diagnostics"
 	"fmt"
 	"io"
 	"io/fs"
 	"path"
 	"strings"
+
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
 type termStyle struct {
@@ -71,13 +72,13 @@ func buildDiagnosticLocation(filePath string, startLine, startCol, endLine, endC
 	}
 }
 
-func printDiagnostics(fsys fs.FS, path string, w io.Writer, diagResult projects.DiagnosticResult, de *diagnostics.DiagnosticEnv, noColors bool) {
+func printDiagnostics(w io.Writer, diagResult projects.DiagnosticResult, de *diagnostics.DiagnosticEnv, noColors bool) {
 	for _, d := range diagResult.Diagnostics() {
-		printDiagnostic(fsys, path, w, d, de, noColors)
+		printDiagnostic(w, d, de, noColors)
 	}
 }
 
-func printDiagnostic(fsys fs.FS, path string, w io.Writer, d diagnostics.Diagnostic, de *diagnostics.DiagnosticEnv, noColors bool) {
+func printDiagnostic(w io.Writer, d diagnostics.Diagnostic, de *diagnostics.DiagnosticEnv, noColors bool) {
 	s := termStyleFor(noColors)
 	printDiagnosticHeader(w, s, d)
 
@@ -98,7 +99,7 @@ func printDiagnostic(fsys fs.FS, path string, w io.Writer, d diagnostics.Diagnos
 		de.EndLine(location), de.EndColumn(location),
 	)
 	printDiagnosticLocation(w, s, loc)
-	printSourceSnippet(w, s, loc, fsys, s.severityColor(d.DiagnosticInfo().Severity()), path)
+	printSourceSnippetContent(w, s, loc, de.TextDocument(location).String(), s.severityColor(d.DiagnosticInfo().Severity()))
 	fmt.Fprintln(w)
 }
 
@@ -113,7 +114,8 @@ func printDiagnosticHeader(w io.Writer, s termStyle, d diagnostics.Diagnostic) {
 }
 
 func printDiagnosticLocation(w io.Writer, s termStyle, loc diagnosticLocation) {
-	fmt.Fprintf(w, "%*s%s %s:%d:%d\n",
+	fmt.Fprintf(
+		w, "%*s%s %s:%d:%d\n",
 		loc.numWidth, "", s.cyan("-->"), loc.filePath, loc.startLine+1, loc.startCol+1,
 	)
 	if loc.filePath != "" {
@@ -132,13 +134,8 @@ func snippetSourcePath(fsys fs.FS, projectOrFilePath, diagFile string) string {
 	return path.Join(projectOrFilePath, diagFile)
 }
 
-func printSourceSnippet(w io.Writer, s termStyle, loc diagnosticLocation, fsys fs.FS, severityColor func(string) string, path string) {
-	content, err := fs.ReadFile(fsys, snippetSourcePath(fsys, path, loc.filePath))
-	if err != nil {
-		fmt.Fprintf(w, "%*s %s %s\n", loc.numWidth, "", s.cyan("|"), severityColor(fmt.Sprintf("Could not read source file: %v", err)))
-		return
-	}
-	lines := strings.Split(string(content), "\n")
+func printSourceSnippetContent(w io.Writer, s termStyle, loc diagnosticLocation, content string, severityColor func(string) string) {
+	lines := strings.Split(content, "\n")
 	if loc.startLine >= len(lines) {
 		return
 	}

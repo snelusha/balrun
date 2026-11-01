@@ -2,7 +2,46 @@ go 1.27
 
 toolchain go1.27.1
 
-use (
-	.
-	./ballerina
-)
+use .
+
+replace github.com/ballerina-nutcracker/ballerina v0.7.0 => ./ballerina
+
+replace github.com/ballerina-nutcracker/ballerina/ast v0.7.0 => ./ballerina/ast
+
+replace github.com/ballerina-nutcracker/ballerina/bir v0.7.0 => ./ballerina/bir
+
+replace github.com/ballerina-nutcracker/ballerina/birgen v0.7.0 => ./ballerina/birgen
+
+replace github.com/ballerina-nutcracker/ballerina/cli v0.7.0 => ./ballerina/cli
+
+replace github.com/ballerina-nutcracker/ballerina/common v0.7.0 => ./ballerina/common
+
+replace github.com/ballerina-nutcracker/ballerina/context v0.7.0 => ./ballerina/context
+
+replace github.com/ballerina-nutcracker/ballerina/decimal v0.7.0 => ./ballerina/decimal
+
+replace github.com/ballerina-nutcracker/ballerina/desugar v0.7.0 => ./ballerina/desugar
+
+replace github.com/ballerina-nutcracker/ballerina/lib v0.7.0 => ./ballerina/lib
+
+replace github.com/ballerina-nutcracker/ballerina/model v0.7.0 => ./ballerina/model
+
+replace github.com/ballerina-nutcracker/ballerina/nodebuilder v0.7.0 => ./ballerina/nodebuilder
+
+replace github.com/ballerina-nutcracker/ballerina/parser v0.7.0 => ./ballerina/parser
+
+replace github.com/ballerina-nutcracker/ballerina/platform v0.7.0 => ./ballerina/platform
+
+replace github.com/ballerina-nutcracker/ballerina/projects v0.7.0 => ./ballerina/projects
+
+replace github.com/ballerina-nutcracker/ballerina/runtime v0.7.0 => ./ballerina/runtime
+
+replace github.com/ballerina-nutcracker/ballerina/semantics v0.7.0 => ./ballerina/semantics
+
+replace github.com/ballerina-nutcracker/ballerina/semtypes v0.7.0 => ./ballerina/semtypes
+
+replace github.com/ballerina-nutcracker/ballerina/st v0.7.0 => ./ballerina/st
+
+replace github.com/ballerina-nutcracker/ballerina/tools v0.7.0 => ./ballerina/tools
+
+replace github.com/ballerina-nutcracker/ballerina/values v0.7.0 => ./ballerina/values
