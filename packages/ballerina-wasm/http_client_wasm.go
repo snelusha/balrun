@@ -1,7 +1,6 @@
 package main
 
 import (
-	"ballerina/platform/pal"
 	"bytes"
 	"context"
 	"fmt"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"syscall/js"
 	"time"
+
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
 type fetchHTTPClient struct {

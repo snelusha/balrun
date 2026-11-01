@@ -1,11 +1,12 @@
 package main
 
 import (
-	"ballerina/platform/pal"
 	"io"
 	"net/http"
 	"syscall/js"
 	"time"
+
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
 var processStart = time.Now()
@@ -25,8 +26,8 @@ func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.Si
 		},
 		OS: newPalOS(osProxy),
 		HTTP: pal.HTTP{
-			NewClient: func(cfg pal.ClientConfig) pal.HTTPClient {
-				return &fetchHTTPClient{cfg: cfg}
+			NewClient: func(cfg pal.ClientConfig) (pal.HTTPClient, error) {
+				return &fetchHTTPClient{cfg: cfg}, nil
 			},
 			Listen: func(cfg pal.ServerConfig, handler http.Handler) (pal.ServerHandle, error) {
 				return listen(httpListenerTransport, cfg, handler)

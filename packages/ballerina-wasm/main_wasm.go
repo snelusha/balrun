@@ -1,17 +1,18 @@
 package main
 
 import (
-	_ "ballerina/lib/rt"
-	"ballerina/platform/pal"
-	"ballerina/projects"
-	"ballerina/runtime"
-	"ballerina/tools/diagnostics"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path"
 	"syscall/js"
+
+	_ "github.com/ballerina-nutcracker/ballerina/lib/rt"
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
+	"github.com/ballerina-nutcracker/ballerina/projects"
+	"github.com/ballerina-nutcracker/ballerina/runtime"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
 var (

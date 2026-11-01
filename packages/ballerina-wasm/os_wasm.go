@@ -1,10 +1,11 @@
 package main
 
 import (
-	"ballerina/platform/pal"
 	"errors"
 	"fmt"
 	"syscall/js"
+
+	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
 type palOS struct {
