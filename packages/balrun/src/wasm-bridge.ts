@@ -6,6 +6,7 @@ import type {
 	BallerinaStopMode,
 } from "./ballerina-core";
 import { createHTTPListenerTransport } from "./http-listener";
+import { createNetPlatform } from "./net";
 import { createOSPlatform } from "./os";
 
 import type {
@@ -23,6 +24,7 @@ const NODE_FS_PROMISES_MODULE = "node:fs/promises";
 interface WasmPlatform {
 	httpListenerTransport: HTTPListenerTransport;
 	os: OSPlatform;
+	net: ReturnType<typeof createNetPlatform> | undefined;
 }
 
 interface WasmRunOptions extends BallerinaRunOptions {
@@ -52,6 +54,7 @@ export class WasmBridge implements BallerinaCore {
 	private activeRun = false;
 
 	private platform: Omit<WasmPlatform, "os"> = {
+		net: supportsNodeNet() ? createNetPlatform() : undefined,
 		httpListenerTransport: createHTTPListenerTransport(
 			(listener, request) =>
 				this.exports.dispatchHttpRequest(listener.host, listener.port, request),
@@ -177,6 +180,10 @@ function shouldFetch(source: string): boolean {
 	} catch {
 		return false;
 	}
+}
+
+function supportsNodeNet(): boolean {
+	return typeof process !== "undefined" && !!process.versions?.node;
 }
 
 function toLocalPath(path: string): string | URL {
