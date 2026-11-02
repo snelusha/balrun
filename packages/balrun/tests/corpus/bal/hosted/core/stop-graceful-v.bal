@@ -4,7 +4,7 @@ class TestListener {
     public function attach(service object {} svc, () attachPoint = ()) returns () {
         _ = svc;
         _ = attachPoint;
-        io:println("ready");
+        io:println("ready"); // @output ready
     }
 
     public function detach(service object {} svc) returns error? {
@@ -15,7 +15,7 @@ class TestListener {
     }
 
     public function gracefulStop() returns error? {
-        io:println("graceful stop");
+        io:println("graceful stop"); // @output graceful stop
     }
 
     public function immediateStop() returns error? {

@@ -56,7 +56,8 @@
 	"scripts": {
 		"build": "tsdown && cp ../ballerina-wasm/dist/ballerina.wasm dist/ballerina.wasm",
 		"test": "bun test --isolate",
-		"test:node": "node tests/node-smoke.mjs",
+		"test:node": "node tests/node-corpus.mjs",
+		"test:update": "UPDATE_CORPUS=1 bun test --isolate tests/corpus.test.ts",
 		"typecheck": "bun check",
 		"clean": "git clean -xdf .turbo dist"
 	},

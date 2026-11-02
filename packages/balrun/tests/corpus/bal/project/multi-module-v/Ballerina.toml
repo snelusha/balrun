@@ -1,0 +1,4 @@
+[package]
+org = "balrun"
+name = "multi_module"
+version = "0.1.0"

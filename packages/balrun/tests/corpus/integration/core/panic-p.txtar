@@ -1,0 +1,6 @@
+-- stdout --
+-- stderr --
+error: boom
+        at main(panic-p.bal:2)
+-- exitcode --
+1

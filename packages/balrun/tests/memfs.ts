@@ -40,11 +40,20 @@ export class MemFS implements FS {
 	}
 
 	async readDir(path: string): Promise<DirEntry[] | null> {
-		if (path !== ".") return null;
-		return [...this.files.keys()].map((name) => ({
-			name,
-			isDir: false,
-		}));
+		if (!this.directories.has(path)) return null;
+		const prefix = path === "." ? "" : `${path}/`;
+		const isChild = (entry: string) =>
+			entry !== "." && entry.startsWith(prefix) && !entry.slice(prefix.length).includes("/");
+		return [
+			...[...this.directories].filter(isChild).map((entry) => ({
+				name: entry.slice(prefix.length),
+				isDir: true,
+			})),
+			...[...this.files.keys()].filter(isChild).map((entry) => ({
+				name: entry.slice(prefix.length),
+				isDir: false,
+			})),
+		];
 	}
 
 	async writeFile(path: string, content: string): Promise<boolean> {

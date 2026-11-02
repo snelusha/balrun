@@ -1,0 +1,12 @@
+-- stdout --
+present
+present
+true
+true
+true
+0
+hello
+true
+-- stderr --
+-- exitcode --
+0

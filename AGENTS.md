@@ -32,6 +32,17 @@ Useful root scripts:
 - Oxlint and Oxfmt are the primary linter and formatter; keep tab indentation and double quotes.
 - Avoid editing generated `dist/` files unless explicitly required.
 
+## Tests
+
+Ballerina programs are tested through the corpus in `packages/balrun/tests/corpus`, not as sources inside TypeScript. Tests run with `bun run test`, and with `bun run test:node` under Node.js.
+
+- `bal/<path>-{v,e,p}.bal` is a case; a directory with the same suffix is a project. `-v` runs cleanly, `-e` fails to compile, `-p` panics.
+- `integration/<path>.txtar` is its golden, with `stdout`, `stderr`, and `exitcode` sections. Generate goldens with `bun run --filter @snelusha/balrun test:update` and review the diff.
+- Mark each printed line with `// @output <text>`. Markers are checked in update mode too.
+- Add `// @requires ipv6` when a case needs it. Cases under `bal/browser/` run without host sockets.
+- Cases under `bal/hosted/` need something outside Ballerina, such as a server or an external peer, and each needs a driver in `tests/harness/drivers.ts`.
+- Corpus programs use fixed ports from `19600` to `19999`, and each port belongs to one case.
+
 ## Task completion
 
 Before considering work complete, `bun run lint` and `bun run test` should pass at the repository root.

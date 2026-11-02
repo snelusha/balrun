@@ -1,0 +1,7 @@
+-- stdout --
+ran
+-- stderr --
+error: exit without cleanup
+        at main(releases-leaked-sockets-p.bal:18)
+-- exitcode --
+1

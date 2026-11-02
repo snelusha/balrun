@@ -1,0 +1,9 @@
+-- stdout --
+-- stderr --
+error[SEMANTIC_ERROR]: incompatible type: expected int, got "not an int"
+ --> type-error-e.bal:2:17
+  |
+2 |     int value = "not an int";
+  |                 ^^^^^^^^^^^^
+-- exitcode --
+1

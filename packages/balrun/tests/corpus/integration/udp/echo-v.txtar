@@ -1,0 +1,9 @@
+-- stdout --
+hello 127.0.0.1:19601
+true
+true
+world
+true
+-- stderr --
+-- exitcode --
+0

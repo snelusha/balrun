@@ -1,0 +1,6 @@
+-- stdout --
+ready
+graceful stop
+-- stderr --
+-- exitcode --
+130

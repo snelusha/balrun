@@ -58,8 +58,8 @@ async function runCli(args: string[], signal?: NodeJS.Signals) {
 	}
 }
 
-function fixturePath(name: string): string {
-	return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
+function corpusPath(name: string): string {
+	return fileURLToPath(new URL(`./corpus/bal/${name}.bal`, import.meta.url));
 }
 
 describe("CLI", () => {
@@ -84,7 +84,7 @@ describe("CLI", () => {
 	});
 
 	it("runs a Ballerina file", async () => {
-		const result = await runCli([fileURLToPath(new URL("./fixtures/hello.bal", import.meta.url))]);
+		const result = await runCli([corpusPath("core/hello-v")]);
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toBe("Hello, Ballerina!\n");
@@ -92,7 +92,7 @@ describe("CLI", () => {
 	});
 
 	it("prints runtime errors and exits 1", async () => {
-		const missingPath = fileURLToPath(new URL("./fixtures/does-not-exist.bal", import.meta.url));
+		const missingPath = corpusPath("core/does-not-exist");
 		const result = await runCli([missingPath]);
 
 		expect(result.exitCode).toBe(1);
@@ -101,7 +101,7 @@ describe("CLI", () => {
 	});
 
 	it("forwards SIGINT as a graceful stop", async () => {
-		const result = await runCli([fixturePath("listener.bal")], "SIGINT");
+		const result = await runCli([corpusPath("hosted/core/stop-graceful-v")], "SIGINT");
 
 		expect(result.exitCode).toBe(130);
 		expect(result.stdout).toContain("graceful stop");
@@ -109,7 +109,7 @@ describe("CLI", () => {
 	});
 
 	it("forwards SIGQUIT as an immediate stop", async () => {
-		const result = await runCli([fixturePath("listener.bal")], "SIGQUIT");
+		const result = await runCli([corpusPath("hosted/core/stop-graceful-v")], "SIGQUIT");
 
 		expect(result.exitCode).toBe(131);
 		expect(result.stdout).toContain("immediate stop");

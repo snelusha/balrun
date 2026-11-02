@@ -85,6 +85,7 @@ export class WasmBridge implements BallerinaCore {
 		if (this.activeRun) return Promise.reject(new Error("[balrun]: a run is already active."));
 		const { onListenerReady, ...runOptions } = options ?? {};
 		this.activeRun = true;
+		this.setScheduledTimeoutsRef(true);
 		this.onListenerReady = onListenerReady;
 		try {
 			return await this.exports.run(proxy, path, {
@@ -98,7 +99,7 @@ export class WasmBridge implements BallerinaCore {
 		} finally {
 			this.activeRun = false;
 			this.onListenerReady = undefined;
-			this.clearScheduledTimeouts();
+			this.setScheduledTimeoutsRef(false);
 		}
 	}
 
@@ -110,15 +111,17 @@ export class WasmBridge implements BallerinaCore {
 		return this.platform.httpListenerTransport.dispatch(request);
 	}
 
-	private clearScheduledTimeouts(): void {
-		// HTTP client timeouts leave Go WASM timers pending, which keeps Node alive.
-		const timeouts = this.go?._scheduledTimeouts;
-		if (!timeouts) return;
-
-		for (const timeout of timeouts.values()) {
-			clearTimeout(timeout);
+	/**
+	 * Timers left over from a run shouldn't keep Node.js alive, but they can't be
+	 * cleared: the Go runtime remembers its pending timer and may rely on it in the
+	 * next run, which would then never wake up.
+	 */
+	private setScheduledTimeoutsRef(ref: boolean): void {
+		for (const timeout of this.go?._scheduledTimeouts?.values() ?? []) {
+			const handle = timeout as { ref?: () => void; unref?: () => void };
+			if (ref) handle.ref?.();
+			else handle.unref?.();
 		}
-		timeouts.clear();
 	}
 }
 
