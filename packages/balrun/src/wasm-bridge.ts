@@ -16,6 +16,7 @@ import type {
 	HTTPListenerRequest,
 	HTTPListenerResponse,
 } from "./http-listener";
+import type { NetPlatform } from "./net";
 import type { OSPlatform } from "./os";
 import type { FS } from "./fs/core";
 
@@ -24,7 +25,7 @@ const NODE_FS_PROMISES_MODULE = "node:fs/promises";
 interface WasmPlatform {
 	httpListenerTransport: HTTPListenerTransport;
 	os: OSPlatform;
-	net: ReturnType<typeof createNetPlatform> | undefined;
+	net: NetPlatform | undefined;
 }
 
 interface WasmRunOptions extends BallerinaRunOptions {
@@ -53,8 +54,7 @@ export class WasmBridge implements BallerinaCore {
 	private onListenerReady: ((listener: HTTPListenerReady) => void) | undefined;
 	private activeRun = false;
 
-	private platform: Omit<WasmPlatform, "os"> = {
-		net: supportsNodeNet() ? createNetPlatform() : undefined,
+	private platform: Omit<WasmPlatform, "os" | "net"> = {
 		httpListenerTransport: createHTTPListenerTransport(
 			(listener, request) =>
 				this.exports.dispatchHttpRequest(listener.host, listener.port, request),
@@ -86,12 +86,15 @@ export class WasmBridge implements BallerinaCore {
 		const { onListenerReady, ...runOptions } = options ?? {};
 		this.activeRun = true;
 		this.onListenerReady = onListenerReady;
+		// Sockets a program leaves open would keep Node alive and hold their ports for the next run.
+		const net = supportsNodeNet() ? createNetPlatform() : undefined;
 		try {
 			return await this.exports.run(proxy, path, {
 				...runOptions,
-				platform: { ...this.platform, os: createOSPlatform(runOptions.env) },
+				platform: { ...this.platform, os: createOSPlatform(runOptions.env), net },
 			});
 		} finally {
+			await net?.closeAll();
 			this.activeRun = false;
 			this.onListenerReady = undefined;
 			this.clearScheduledTimeouts();
