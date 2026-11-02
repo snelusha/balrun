@@ -6,20 +6,35 @@ const NODE_NET_MODULE = "node:net";
 const NODE_TLS_MODULE = "node:tls";
 const NODE_DGRAM_MODULE = "node:dgram";
 const NODE_DNS_MODULE = "node:dns/promises";
+const NODE_CRYPTO_MODULE = "node:crypto";
 
-// net_wasm.go matches these messages to return os.ErrDeadlineExceeded and net.ErrClosed.
-const TIMEOUT_MESSAGE = "[balrun]: network operation timed out";
-const CLOSED_MESSAGE = "[balrun]: use of closed network connection";
+// net_wasm.go maps these error codes back to the errors Go callers check for.
+const TIMEOUT_CODE = "BALRUN_NET_TIMEOUT";
+const CLOSED_CODE = "BALRUN_NET_CLOSED";
 
+// Matches the idle time and interval of Go's default TCP keep-alive.
+const TCP_KEEPALIVE_MILLIS = 15_000;
 const MAX_TIMER_DELAY = 2 ** 31 - 1;
 const SSL_OP_NO_TICKET = 0x00004000;
+// Stops reading from a TCP peer past this much unread data, so backpressure reaches the sender.
+const STREAM_HIGH_WATER_BYTES = 1024 * 1024;
+const STREAM_LOW_WATER_BYTES = STREAM_HIGH_WATER_BYTES / 2;
+// Like a kernel receive buffer, datagrams past this limit are dropped.
+const MAX_QUEUED_DATAGRAM_BYTES = 4 * 1024 * 1024;
+const DATAGRAM_OVERHEAD_BYTES = 64;
+// Like a full kernel accept backlog, connections past this limit are refused.
+const MAX_PENDING_CONNECTIONS = 1024;
 const IPV4_MAPPED_PREFIX = "::ffff:";
+
+// Go's cipher list never affects TLSv1.3, but Node turns TLSv1.3 off unless the list names a suite.
+const TLS13_CIPHERS = [
+	"TLS_AES_128_GCM_SHA256",
+	"TLS_AES_256_GCM_SHA384",
+	"TLS_CHACHA20_POLY1305_SHA256",
+];
 
 // Node reads every `TLS_*` name as a TLSv1.3 suite, so TLSv1.2 IANA names need their OpenSSL names.
 const OPENSSL_CIPHERS: Record<string, string> = {
-	TLS_AES_128_GCM_SHA256: "TLS_AES_128_GCM_SHA256",
-	TLS_AES_256_GCM_SHA384: "TLS_AES_256_GCM_SHA384",
-	TLS_CHACHA20_POLY1305_SHA256: "TLS_CHACHA20_POLY1305_SHA256",
 	TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256: "ECDHE-ECDSA-AES128-GCM-SHA256",
 	TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256: "ECDHE-RSA-AES128-GCM-SHA256",
 	TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384: "ECDHE-ECDSA-AES256-GCM-SHA384",
@@ -86,28 +101,28 @@ export interface StreamHandle {
 	read(size: number): Promise<Uint8Array | null>;
 	write(data: Uint8Array): Promise<number>;
 	close(): Promise<void>;
-	localAddress(): Promise<SocketAddress>;
-	remoteAddress(): Promise<SocketAddress>;
-	/** Applies to in-flight operations too; `undefined` clears the deadline. */
-	setReadDeadline(unixMillis?: number): void;
-	setWriteDeadline(unixMillis?: number): void;
+	localAddress(): SocketAddress;
+	remoteAddress(): SocketAddress;
+	/** Applies to in-flight operations too; `undefined` clears it. Returns false once closed. */
+	setReadDeadline(unixMillis?: number): boolean;
+	setWriteDeadline(unixMillis?: number): boolean;
 }
 
 export interface ListenerHandle {
 	accept(): Promise<StreamHandle>;
 	close(): Promise<void>;
-	address(): Promise<SocketAddress>;
+	address(): SocketAddress;
 }
 
 export interface PacketHandle {
-	readFrom(size: number): Promise<{ data: Uint8Array; address: SocketAddress } | null>;
+	readFrom(size: number): Promise<{ data: Uint8Array; address: SocketAddress }>;
 	writeTo(data: Uint8Array, address?: SocketAddress): Promise<number>;
 	close(): Promise<void>;
-	localAddress(): Promise<SocketAddress>;
-	remoteAddress(): Promise<SocketAddress | null>;
-	/** Applies to in-flight operations too; `undefined` clears the deadline. */
-	setReadDeadline(unixMillis?: number): void;
-	setWriteDeadline(unixMillis?: number): void;
+	localAddress(): SocketAddress;
+	remoteAddress(): SocketAddress | null;
+	/** Applies to in-flight operations too; `undefined` clears it. Returns false once closed. */
+	setReadDeadline(unixMillis?: number): boolean;
+	setWriteDeadline(unixMillis?: number): boolean;
 }
 
 export function createNetPlatform(): NetPlatform {
@@ -167,25 +182,26 @@ class NodeNetPlatform implements NetPlatform {
 		signal?: AbortSignal,
 	): Promise<StreamHandle> {
 		const family = tcpFamily(network);
-		const { address: host, port } = parseAddress(address);
-		if (host === "") throw new Error(`invalid remote socket address: ${address}`);
-		const local = localAddress === "" ? undefined : parseAddress(localAddress);
-		const target = { host, port, family, local, signal: this.tracker.signal(signal) };
+		const remote = parseAddress(address);
+		// Like Go, an empty host means the local system.
+		const host = remote.address || "localhost";
+		await assertLiteralFamily(host, family);
+		const combined = this.tracker.signal(signal);
+		const local = await abortable(resolveLocal(family, localAddress), combined);
+		const target = { host, port: remote.port, family, local, signal: combined };
 		const socket = tls ? await connectTLS(target, tls) : await connectTCP(target);
 		return this.tracker.adopt(new NodeStream(socket, this.tracker));
 	}
 
 	async listen(network: string, address: string, tls?: TLSOptions): Promise<ListenerHandle> {
 		const family = tcpFamily(network);
-		const { address: host, port } = parseAddress(address);
-		const server = tls ? await createTLSServer(tls) : (await nodeNet()).createServer();
+		const local = parseAddress(address);
+		const server = tls
+			? await createTLSServer(tls)
+			: (await nodeNet()).createServer({ allowHalfOpen: true });
+		await listen(server, await listenHost(family, local), local.port, family === 6);
 		const listener = new NodeListener(server, this.tracker);
 		server.on(tls ? "secureConnection" : "connection", (socket: Socket) => listener.push(socket));
-		await listen(
-			server,
-			host || (family === 4 ? "0.0.0.0" : family === 6 ? "::" : undefined),
-			port,
-		);
 		return this.tracker.adopt(listener);
 	}
 
@@ -195,24 +211,28 @@ class NodeNetPlatform implements NetPlatform {
 		localAddress: string,
 		signal?: AbortSignal,
 	): Promise<PacketHandle> {
+		const networkFamily = udpFamily(network);
 		const target = parseAddress(address);
-		if (target.address === "") throw new Error(`invalid remote socket address: ${address}`);
-		const remote = await resolveAddress(udpFamily(network), target);
-		const { createSocket } = await nodeDgram();
-		const socket = createSocket(remote.family === "IPv6" ? "udp6" : "udp4");
-		const packet = new NodePacket(socket, this.tracker, { remote });
+		const combined = this.tracker.signal(signal);
+		const local = await abortable(resolveLocal(networkFamily, localAddress), combined);
+		// Like Go, a specific local address limits which remote addresses can be used.
+		const family = local?.address ? familyNumber(local.family) : networkFamily;
+		const remote = await abortable(
+			resolveAddress(family, { ...target, address: target.address || "localhost" }, false),
+			combined,
+		);
+		const socket = (await nodeDgram()).createSocket({
+			type: remote.family === "IPv6" ? "udp6" : "udp4",
+			ipv6Only: networkFamily === 6,
+		});
 		try {
-			this.tracker.signal(signal).throwIfAborted();
-			if (localAddress !== "") {
-				const local = parseAddress(localAddress);
-				await bind(socket, local.address || undefined, local.port);
-			}
-			await connectDatagram(socket, remote.address, remote.port);
+			if (local) await abortable(bind(socket, local.address || undefined, local.port), combined);
+			await abortable(connectDatagram(socket, remote.address, remote.port), combined);
 		} catch (error) {
-			await packet.close().catch(() => undefined);
+			closeQuietly(socket);
 			throw error;
 		}
-		return this.tracker.adopt(packet);
+		return this.tracker.adopt(new NodePacket(socket, this.tracker, { remote }));
 	}
 
 	async listenPacket(network: string, address: string): Promise<PacketHandle> {
@@ -226,10 +246,11 @@ class NodeNetPlatform implements NetPlatform {
 	}
 
 	async resolvePacketAddr(network: string, address: string): Promise<SocketAddress> {
+		const family = udpFamily(network);
 		const target = parseAddress(address);
 		// Go leaves an empty host unresolved and sends such datagrams to the local host.
 		if (target.address === "") return target;
-		return resolveAddress(udpFamily(network), target);
+		return resolveAddress(family, target, true);
 	}
 
 	closeAll(): Promise<void> {
@@ -238,33 +259,33 @@ class NodeNetPlatform implements NetPlatform {
 
 	private async bindPacket(family: 0 | 4 | 6, local: SocketAddress): Promise<NodePacket> {
 		const { createSocket } = await nodeDgram();
-		const resolved = local.address === "" ? undefined : await resolveAddress(family, local);
-		const type = family === 6 || resolved?.family === "IPv6" ? "udp6" : "udp4";
-		const socket = createSocket(type);
-		const packet = new NodePacket(socket, this.tracker);
+		const resolved = local.address === "" ? undefined : await resolveAddress(family, local, true);
+		const socket = createSocket({
+			type: family === 6 || resolved?.family === "IPv6" ? "udp6" : "udp4",
+			ipv6Only: family === 6,
+		});
 		try {
 			await bind(socket, resolved?.address, local.port);
 		} catch (error) {
-			await packet.close().catch(() => undefined);
+			closeQuietly(socket);
 			throw error;
 		}
-		return packet;
+		return new NodePacket(socket, this.tracker);
 	}
 
 	// Like Go, an unspecified host on "udp" accepts both IPv4 and IPv6 where the host allows it.
 	private async listenDualStack(port: number): Promise<NodePacket> {
 		const { createSocket } = await nodeDgram();
 		const socket = createSocket({ type: "udp6", ipv6Only: false });
-		const packet = new NodePacket(socket, this.tracker, { dualStack: true });
 		try {
 			await bind(socket, "::", port);
-			return packet;
 		} catch (error) {
-			await packet.close().catch(() => undefined);
+			closeQuietly(socket);
 			const code = (error as NodeJS.ErrnoException).code;
 			if (code !== "EAFNOSUPPORT" && code !== "EADDRNOTAVAIL") throw error;
 			return this.bindPacket(4, { address: "0.0.0.0", port });
 		}
+		return new NodePacket(socket, this.tracker, { dualStack: true });
 	}
 }
 
@@ -304,6 +325,13 @@ class Deadline {
 		});
 	}
 
+	/** Clears the deadline and fails every waiting operation with `error`. */
+	cancel(error: Error): void {
+		this.set();
+		for (const reject of this.rejecters) reject(error);
+		this.rejecters.clear();
+	}
+
 	private arm(): void {
 		if (this.at === undefined) return;
 		const delay = this.at - Date.now();
@@ -340,19 +368,83 @@ class Signal {
 	}
 }
 
-class NodeStream implements StreamHandle {
+abstract class DeadlineHandle {
+	protected closed = false;
+	protected readDeadline = new Deadline();
+	protected writeDeadline = new Deadline();
+
+	setReadDeadline(unixMillis?: number): boolean {
+		if (this.closed) return false;
+		this.readDeadline.set(unixMillis);
+		return true;
+	}
+
+	setWriteDeadline(unixMillis?: number): boolean {
+		if (this.closed) return false;
+		this.writeDeadline.set(unixMillis);
+		return true;
+	}
+
+	protected ensureOpen(): void {
+		if (this.closed) throw closedError();
+	}
+
+	protected markClosed(): void {
+		this.ensureOpen();
+		this.closed = true;
+		this.readDeadline.cancel(closedError());
+		this.writeDeadline.cancel(closedError());
+	}
+
+	protected async writeWithDeadline(
+		size: number,
+		send: (done: (error?: Error | null) => void) => void,
+	): Promise<number> {
+		this.ensureOpen();
+		this.writeDeadline.check();
+		try {
+			await this.writeDeadline.race(
+				new Promise<void>((resolve, reject) =>
+					send((error) => (error ? reject(error) : resolve())),
+				),
+			);
+		} catch (error) {
+			this.ensureOpen();
+			if (isTimeout(error)) this.onWriteTimeout();
+			throw error;
+		}
+		return size;
+	}
+
+	protected onWriteTimeout(): void {}
+}
+
+class NodeStream extends DeadlineHandle implements StreamHandle {
 	private chunks: Uint8Array[] = [];
+	private bufferedBytes = 0;
+	private paused = false;
 	private ended = false;
-	private closed = false;
 	private failure: Error | null = null;
 	private signal = new Signal();
-	private readDeadline = new Deadline();
-	private writeDeadline = new Deadline();
+	private local: SocketAddress;
+	private remote: SocketAddress;
 
 	constructor(
 		private socket: Socket,
 		private tracker: HandleTracker,
 	) {
+		super();
+		// Go's TCP connections default to both; without them small writes stall on Nagle's
+		// algorithm and a vanished peer is never detected.
+		socket.setNoDelay(true);
+		socket.setKeepAlive(true, TCP_KEEPALIVE_MILLIS);
+		// Addresses are captured now because Go can still ask after the socket has gone away.
+		this.local = socketAddress(socket.address());
+		this.remote = {
+			address: fromIPv4Mapped(socket.remoteAddress ?? ""),
+			port: socket.remotePort ?? 0,
+			family: socket.remoteFamily,
+		};
 		socket.on("data", (chunk: Uint8Array) => this.push(chunk));
 		socket.once("end", () => this.finish());
 		socket.once("close", () => {
@@ -374,68 +466,51 @@ class NodeStream implements StreamHandle {
 			if (this.failure) throw this.failure;
 			return null;
 		}
-		if (chunk.length <= size) return chunk;
-		this.chunks.unshift(chunk.subarray(size));
-		return chunk.subarray(0, size);
+		const data = chunk.length <= size ? chunk : chunk.subarray(0, size);
+		if (data !== chunk) this.chunks.unshift(chunk.subarray(size));
+		this.bufferedBytes -= data.length;
+		if (this.paused && this.bufferedBytes <= STREAM_LOW_WATER_BYTES) {
+			this.paused = false;
+			this.socket.resume();
+		}
+		return data;
 	}
 
-	async write(data: Uint8Array): Promise<number> {
-		this.ensureOpen();
-		this.writeDeadline.check();
-		try {
-			await this.writeDeadline.race(
-				new Promise<void>((resolve, reject) => {
-					this.socket.write(data, (error) => (error ? reject(error) : resolve()));
-				}),
-			);
-		} catch (error) {
-			this.ensureOpen();
-			throw error;
-		}
-		return data.length;
+	write(data: Uint8Array): Promise<number> {
+		return this.writeWithDeadline(data.length, (done) => this.socket.write(data, done));
 	}
 
 	async close(): Promise<void> {
-		this.ensureOpen();
-		this.closed = true;
+		this.markClosed();
 		this.tracker.delete(this);
-		this.readDeadline.set();
-		this.writeDeadline.set();
 		// A write stuck behind a stalled peer would keep a graceful close from ever finishing.
 		if (this.socket.writableLength > 0) this.socket.destroy();
 		else this.socket.destroySoon();
 		this.signal.wake();
 	}
 
-	async localAddress(): Promise<SocketAddress> {
-		return socketAddress(this.socket.address() as AddressInfo | string | null);
+	localAddress(): SocketAddress {
+		return this.local;
 	}
 
-	async remoteAddress(): Promise<SocketAddress> {
-		if (!this.socket.remoteAddress || this.socket.remotePort === undefined) {
-			throw new Error("socket has no remote address");
-		}
-		return {
-			address: this.socket.remoteAddress,
-			port: this.socket.remotePort,
-			family: this.socket.remoteFamily,
-		};
+	remoteAddress(): SocketAddress {
+		return this.remote;
 	}
 
-	setReadDeadline(unixMillis?: number): void {
-		this.readDeadline.set(unixMillis);
-	}
-
-	setWriteDeadline(unixMillis?: number): void {
-		this.writeDeadline.set(unixMillis);
-	}
-
-	private ensureOpen(): void {
-		if (this.closed) throw closedError();
+	// Node can't take back bytes it has queued, and Go would report them as unsent, so a retry
+	// would send them twice. Ending the connection is the only way to keep the stream intact.
+	protected override onWriteTimeout(): void {
+		this.fail(new Error("connection aborted because a write timed out"));
+		this.socket.destroy();
 	}
 
 	private push(chunk: Uint8Array): void {
 		this.chunks.push(chunk);
+		this.bufferedBytes += chunk.length;
+		if (!this.paused && this.bufferedBytes > STREAM_HIGH_WATER_BYTES) {
+			this.paused = true;
+			this.socket.pause();
+		}
 		this.signal.wake();
 	}
 
@@ -445,7 +520,7 @@ class NodeStream implements StreamHandle {
 	}
 
 	private fail(error: Error): void {
-		this.failure = error;
+		this.failure ??= error;
 		this.signal.wake();
 	}
 }
@@ -455,16 +530,22 @@ class NodeListener implements ListenerHandle {
 	private waiters: { resolve: (stream: NodeStream) => void; reject: (error: Error) => void }[] = [];
 	private closed = false;
 	private failure: Error | null = null;
+	private local: SocketAddress;
 
 	constructor(
 		private server: Server,
 		private tracker: HandleTracker,
 	) {
+		this.local = socketAddress(server.address());
 		server.on("error", (error: Error) => this.fail(error));
 	}
 
 	push(socket: Socket): void {
-		if (this.closed) {
+		if (
+			this.closed ||
+			(this.waiters.length === 0 && this.pending.length >= MAX_PENDING_CONNECTIONS)
+		) {
+			socket.on("error", () => undefined);
 			socket.destroy();
 			return;
 		}
@@ -479,7 +560,12 @@ class NodeListener implements ListenerHandle {
 		if (this.closed) throw closedError();
 		const stream = this.pending.shift();
 		if (stream) return stream;
-		if (this.failure) throw this.failure;
+		if (this.failure) {
+			// Reported once: the listener stays open, and a retrying caller mustn't spin on it.
+			const failure = this.failure;
+			this.failure = null;
+			throw failure;
+		}
 		return new Promise((resolve, reject) => this.waiters.push({ resolve, reject }));
 	}
 
@@ -496,13 +582,13 @@ class NodeListener implements ListenerHandle {
 		await Promise.allSettled(pending.map((stream) => stream.close()));
 	}
 
-	async address(): Promise<SocketAddress> {
-		return socketAddress(this.server.address() as AddressInfo | string | null);
+	address(): SocketAddress {
+		return this.local;
 	}
 
 	private fail(error: Error): void {
-		this.failure = error;
-		this.rejectWaiters(error);
+		if (this.waiters.length > 0) this.rejectWaiters(error);
+		else this.failure = error;
 	}
 
 	private rejectWaiters(error: Error): void {
@@ -512,13 +598,12 @@ class NodeListener implements ListenerHandle {
 	}
 }
 
-class NodePacket implements PacketHandle {
+class NodePacket extends DeadlineHandle implements PacketHandle {
 	private messages: { data: Uint8Array; address: SocketAddress }[] = [];
+	private queuedBytes = 0;
 	private signal = new Signal();
-	private closed = false;
 	private failure: Error | null = null;
-	private readDeadline = new Deadline();
-	private writeDeadline = new Deadline();
+	private local: SocketAddress;
 	private remote: SocketAddress | undefined;
 	private dualStack: boolean;
 
@@ -527,9 +612,15 @@ class NodePacket implements PacketHandle {
 		private tracker: HandleTracker,
 		options: { remote?: SocketAddress; dualStack?: boolean } = {},
 	) {
+		super();
 		this.remote = options.remote;
 		this.dualStack = options.dualStack ?? false;
+		// Captured now because Node throws if asked after the socket has closed.
+		this.local = socketAddress(socket.address());
 		socket.on("message", (data, info) => {
+			const cost = data.length + DATAGRAM_OVERHEAD_BYTES;
+			if (this.queuedBytes + cost > MAX_QUEUED_DATAGRAM_BYTES) return;
+			this.queuedBytes += cost;
 			this.messages.push({
 				data,
 				address: { address: fromIPv4Mapped(info.address), port: info.port, family: info.family },
@@ -546,7 +637,7 @@ class NodePacket implements PacketHandle {
 		});
 	}
 
-	async readFrom(size: number): Promise<{ data: Uint8Array; address: SocketAddress } | null> {
+	async readFrom(size: number): Promise<{ data: Uint8Array; address: SocketAddress }> {
 		this.ensureOpen();
 		this.readDeadline.check();
 		while (this.messages.length === 0 && !this.failure) {
@@ -560,59 +651,33 @@ class NodePacket implements PacketHandle {
 			this.failure = null;
 			throw failure;
 		}
+		this.queuedBytes -= message.data.length + DATAGRAM_OVERHEAD_BYTES;
 		return { ...message, data: message.data.subarray(0, size) };
 	}
 
-	async writeTo(data: Uint8Array, address?: SocketAddress): Promise<number> {
-		this.ensureOpen();
-		this.writeDeadline.check();
-		try {
-			await this.writeDeadline.race(
-				new Promise<void>((resolve, reject) => {
-					const done = (error: Error | null) => (error ? reject(error) : resolve());
-					if (address) {
-						const host = this.dualStack ? toIPv4Mapped(address.address) : address.address;
-						this.socket.send(data, address.port, host, done);
-					} else if (this.remote) this.socket.send(data, done);
-					else reject(new Error("packet destination is required"));
-				}),
-			);
-		} catch (error) {
-			this.ensureOpen();
-			throw error;
-		}
-		return data.length;
+	writeTo(data: Uint8Array, address?: SocketAddress): Promise<number> {
+		return this.writeWithDeadline(data.length, (done) => {
+			if (address) {
+				const host = this.dualStack ? toIPv4Mapped(address.address) : address.address;
+				this.socket.send(data, address.port, host, done);
+			} else if (this.remote) this.socket.send(data, done);
+			else done(new Error("packet destination is required"));
+		});
 	}
 
 	async close(): Promise<void> {
-		this.ensureOpen();
-		this.closed = true;
+		this.markClosed();
 		this.tracker.delete(this);
-		this.readDeadline.set();
-		this.writeDeadline.set();
 		this.signal.wake();
 		await new Promise<void>((resolve) => this.socket.close(() => resolve()));
 	}
 
-	async localAddress(): Promise<SocketAddress> {
-		const address = this.socket.address();
-		return { address: address.address, port: address.port, family: address.family };
+	localAddress(): SocketAddress {
+		return this.local;
 	}
 
-	async remoteAddress(): Promise<SocketAddress | null> {
+	remoteAddress(): SocketAddress | null {
 		return this.remote ?? null;
-	}
-
-	setReadDeadline(unixMillis?: number): void {
-		this.readDeadline.set(unixMillis);
-	}
-
-	setWriteDeadline(unixMillis?: number): void {
-		this.writeDeadline.set(unixMillis);
-	}
-
-	private ensureOpen(): void {
-		if (this.closed) throw closedError();
 	}
 }
 
@@ -628,6 +693,9 @@ async function nodeDgram(): Promise<typeof import("node:dgram")> {
 async function nodeDNS(): Promise<typeof import("node:dns/promises")> {
 	return import(/* @vite-ignore */ NODE_DNS_MODULE);
 }
+async function nodeCrypto(): Promise<typeof import("node:crypto")> {
+	return import(/* @vite-ignore */ NODE_CRYPTO_MODULE);
+}
 
 interface DialTarget {
 	host: string;
@@ -641,6 +709,8 @@ function socketOptions({ host, port, family, local }: DialTarget) {
 	return {
 		host,
 		port,
+		// Go can keep writing after the peer's FIN; Node would otherwise end the socket for us.
+		allowHalfOpen: true,
 		...(family !== 0 && { family }),
 		...(local?.address && { localAddress: local.address }),
 		...(local && { localPort: local.port }),
@@ -657,14 +727,19 @@ async function connectTCP(target: DialTarget): Promise<Socket> {
 async function connectTLS(target: DialTarget, options: TLSOptions): Promise<Socket> {
 	target.signal.throwIfAborted();
 	const [tls, net] = await Promise.all([nodeTLS(), nodeNet()]);
+	await assertValidCA(options.ca);
 	const serverName = options.serverName || target.host;
 	const connection: ConnectionOptions = {
 		...socketOptions(target),
 		rejectUnauthorized: !options.insecureSkipVerify,
 		// RFC 6066 forbids IP addresses in SNI, and Node warns if given one.
 		...(net.isIP(serverName) === 0 && { servername: serverName }),
-		...(options.skipHostnameVerification && { checkServerIdentity: () => undefined }),
+		// Node would check the dial host whenever SNI is omitted, not the configured server name.
+		checkServerIdentity: options.skipHostnameVerification
+			? () => undefined
+			: (_host, certificate) => tls.checkServerIdentity(serverName, certificate),
 		...tlsContextOptions(options),
+		...systemTrust(tls, options),
 	};
 	const socket = tls.connect(connection);
 	await waitForConnection(socket, "secureConnect", target.signal, options.handshakeTimeoutMillis);
@@ -672,8 +747,13 @@ async function connectTLS(target: DialTarget, options: TLSOptions): Promise<Sock
 }
 
 async function createTLSServer(options: TLSOptions): Promise<Server> {
+	if (!options.cert?.length || !options.key?.length) {
+		throw new Error("TLS listener requires a certificate and private key");
+	}
+	await assertValidCA(options.ca);
 	const verifyClient = !!options.ca?.length;
 	return (await nodeTLS()).createServer({
+		allowHalfOpen: true,
 		...tlsContextOptions(options),
 		requestCert: verifyClient,
 		rejectUnauthorized: verifyClient,
@@ -699,6 +779,25 @@ function tlsContextOptions(
 		...(maxVersion && { maxVersion }),
 		...(options.disableSessionTickets && { secureOptions: SSL_OP_NO_TICKET }),
 	};
+}
+
+// The native platform trusts the OS store, while Node defaults to its bundled roots.
+function systemTrust(tls: typeof import("node:tls"), options: TLSOptions): { ca?: string[] } {
+	if (options.ca?.length || options.insecureSkipVerify) return {};
+	const { getCACertificates } = tls as { getCACertificates?: (type: string) => string[] };
+	const system = getCACertificates?.("system") ?? [];
+	return system.length > 0 ? { ca: system } : {};
+}
+
+// Node would otherwise accept a malformed CA and only fail later, as a verification error.
+async function assertValidCA(ca: Uint8Array | undefined): Promise<void> {
+	if (!ca?.length) return;
+	const { X509Certificate } = await nodeCrypto();
+	try {
+		new X509Certificate(ca);
+	} catch {
+		throw new Error("failed to parse CA certificate PEM: no valid certificates found");
+	}
 }
 
 /** Settles once `event` fires; on failure or abort the socket is destroyed and this rejects. */
@@ -728,7 +827,7 @@ function waitForConnection(
 			reject(error);
 		};
 		const onClose = () => onError(new Error("connection closed before it was established"));
-		const onAbort = () => onError(new Error("[balrun]: network dial cancelled"));
+		const onAbort = () => onError(cancelledError());
 		const startHandshakeTimer = () => {
 			if (!handshakeTimeoutMillis) return;
 			handshakeTimer = setTimeout(() => onError(timeoutError()), handshakeTimeoutMillis);
@@ -740,11 +839,30 @@ function waitForConnection(
 		socket.once("connect", startHandshakeTimer);
 		socket.once("error", onError);
 		socket.once("close", onClose);
-		signal.addEventListener("abort", onAbort, { once: true });
+		// An abort while the socket was being set up would never reach the listener below.
+		if (signal.aborted) onAbort();
+		else signal.addEventListener("abort", onAbort, { once: true });
 	});
 }
 
-function listen(server: Server, host: string | undefined, port: number): Promise<void> {
+/** Rejects as soon as `signal` aborts, for steps that have no way of being cancelled. */
+function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+	if (signal.aborted) return Promise.reject(cancelledError());
+	return new Promise<T>((resolve, reject) => {
+		const onAbort = () => reject(cancelledError());
+		signal.addEventListener("abort", onAbort, { once: true });
+		void operation
+			.then(resolve, reject)
+			.finally(() => signal.removeEventListener("abort", onAbort));
+	});
+}
+
+function listen(
+	server: Server,
+	host: string | undefined,
+	port: number,
+	ipv6Only: boolean,
+): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const onListening = () => {
 			server.off("error", onError);
@@ -756,7 +874,7 @@ function listen(server: Server, host: string | undefined, port: number): Promise
 		};
 		server.once("listening", onListening);
 		server.once("error", onError);
-		server.listen({ host, port });
+		server.listen({ host, port, ipv6Only });
 	});
 }
 
@@ -780,38 +898,85 @@ function connectDatagram(socket: DatagramSocket, address: string, port: number):
 	return new Promise((resolve, reject) => {
 		const onError = (error: Error) => reject(error);
 		socket.once("error", onError);
-		socket.connect(port, address, () => {
+		// Node reports most connect failures through this callback rather than an "error" event.
+		socket.connect(port, address, (error?: Error | null) => {
 			socket.off("error", onError);
-			resolve();
+			if (error) reject(error);
+			else resolve();
 		});
 	});
 }
 
-/** Resolves a host to one IP, preferring IPv4 when either family is allowed (as Go does). */
-async function resolveAddress(family: 0 | 4 | 6, target: SocketAddress): Promise<SocketAddress> {
-	const { isIP } = await nodeNet();
-	const literal = isIP(target.address);
+function closeQuietly(socket: DatagramSocket): void {
+	try {
+		socket.on("error", () => undefined);
+		socket.close();
+	} catch {
+		// Already closed.
+	}
+}
+
+/**
+ * Resolves a host to one IP. Like Go, binding and ResolvePacketAddr prefer IPv4 when either
+ * family is allowed, while dialing keeps the resolver's order.
+ */
+async function resolveAddress(
+	family: 0 | 4 | 6,
+	target: SocketAddress,
+	preferIPv4: boolean,
+): Promise<SocketAddress> {
+	const literal = await assertLiteralFamily(target.address, family);
 	if (literal !== 0) {
-		if (family !== 0 && family !== literal) {
-			throw new Error(`address ${target.address} does not match network family IPv${family}`);
-		}
 		return { address: target.address, port: target.port, family: `IPv${literal}` };
 	}
 	const resolved = await (await nodeDNS()).lookup(target.address, { family, all: true });
-	const best = resolved.find((entry) => entry.family === 4) ?? resolved[0];
+	const best = (preferIPv4 && resolved.find((entry) => entry.family === 4)) || resolved[0];
 	if (!best) throw new Error(`no addresses found for host: ${target.address}`);
 	return { address: best.address, port: target.port, family: `IPv${best.family}` };
 }
 
-function parseAddress(value: string): SocketAddress {
-	const match = value.match(/^\[([^\]]+)]:(\d+)$/) ?? value.match(/^([^:]*):(\d+)$/);
-	if (!match || match[2] === undefined) throw new Error(`invalid socket address: ${value}`);
-	return { address: match[1] ?? "", port: Number(match[2]) };
+async function assertLiteralFamily(host: string, family: 0 | 4 | 6): Promise<number> {
+	const literal = (await nodeNet()).isIP(host);
+	if (literal !== 0 && family !== 0 && family !== literal) {
+		throw new Error(`address ${host} does not match network family IPv${family}`);
+	}
+	return literal;
 }
 
-function socketAddress(address: string | AddressInfo | null): SocketAddress {
-	if (!address || typeof address === "string") throw new Error("socket has no IP address");
-	return { address: address.address, port: address.port, family: address.family };
+/** A wildcard local host stays empty: it shouldn't limit which remote family can be dialed. */
+async function resolveLocal(
+	family: 0 | 4 | 6,
+	localAddress: string,
+): Promise<SocketAddress | undefined> {
+	if (localAddress === "") return undefined;
+	const local = parseAddress(localAddress);
+	if (isWildcard(local.address)) return { address: "", port: local.port };
+	return resolveAddress(family, local, true);
+}
+
+async function listenHost(family: 0 | 4 | 6, local: SocketAddress): Promise<string | undefined> {
+	if (local.address !== "") await assertLiteralFamily(local.address, family);
+	if (isWildcard(local.address)) {
+		// Node's default host is dual-stack, which is what Go does for "tcp".
+		return family === 4 ? "0.0.0.0" : family === 6 ? "::" : undefined;
+	}
+	return (await resolveAddress(family, local, true)).address;
+}
+
+function familyNumber(family: string | undefined): 0 | 4 | 6 {
+	return family === "IPv4" ? 4 : family === "IPv6" ? 6 : 0;
+}
+
+// Named services such as "host:ldap" aren't supported, since Node has no API to look them up.
+function parseAddress(value: string): SocketAddress {
+	const match = value.match(/^\[([^\]]+)]:(\d*)$/) ?? value.match(/^([^:]*):(\d*)$/);
+	if (!match) throw new Error(`invalid socket address: ${value}`);
+	return { address: match[1] ?? "", port: Number(match[2] ?? 0) };
+}
+
+function socketAddress(address: string | AddressInfo | object | null): SocketAddress {
+	const info = (address ?? {}) as Partial<AddressInfo>;
+	return { address: fromIPv4Mapped(info.address ?? ""), port: info.port ?? 0, family: info.family };
 }
 
 function isWildcard(host: string): boolean {
@@ -828,12 +993,24 @@ function toIPv4Mapped(address: string): string {
 	return /^\d+\.\d+\.\d+\.\d+$/.test(address) ? IPV4_MAPPED_PREFIX + address : address;
 }
 
+function netError(message: string, code: string): Error {
+	return Object.assign(new Error(message), { code });
+}
+
 function timeoutError(): Error {
-	return new Error(TIMEOUT_MESSAGE);
+	return netError("[balrun]: network operation timed out", TIMEOUT_CODE);
 }
 
 function closedError(): Error {
-	return new Error(CLOSED_MESSAGE);
+	return netError("[balrun]: use of closed network connection", CLOSED_CODE);
+}
+
+function cancelledError(): Error {
+	return new Error("[balrun]: network dial cancelled");
+}
+
+function isTimeout(error: unknown): boolean {
+	return (error as { code?: unknown } | null)?.code === TIMEOUT_CODE;
 }
 
 function toBuffer(value: Uint8Array | undefined): Buffer | undefined {
@@ -841,9 +1018,14 @@ function toBuffer(value: Uint8Array | undefined): Buffer | undefined {
 }
 
 function toOpenSSLCiphers(names: string[] | undefined): string | undefined {
-	const resolved = (names ?? []).flatMap((name) => OPENSSL_CIPHERS[name] ?? []);
-	// Like the native platform, keep the secure defaults if no configured name is recognised.
-	return resolved.length > 0 ? resolved.join(":") : undefined;
+	if (!names?.length) return undefined;
+	const known = names.filter((name) => TLS13_CIPHERS.includes(name) || OPENSSL_CIPHERS[name]);
+	if (known.length === 0) {
+		console.warn(`warning: no valid cipher suites in ${names.join(", ")}; keeping secure defaults`);
+		return undefined;
+	}
+	const resolved = known.flatMap((name) => OPENSSL_CIPHERS[name] ?? []);
+	return [...resolved, ...TLS13_CIPHERS].join(":");
 }
 
 function tlsVersion(

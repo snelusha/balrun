@@ -3,22 +3,20 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"os"
 	"strconv"
-	"strings"
 	"syscall/js"
 	"time"
 
 	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
 
-// net.ts raises these messages; netHostError maps them back to the errors callers check for.
+// net.ts sets these codes; netHostError maps them to the errors callers check for.
 const (
-	netTimeoutMessage = "[balrun]: network operation timed out"
-	netClosedMessage  = "[balrun]: use of closed network connection"
+	netTimeoutCode = "BALRUN_NET_TIMEOUT"
+	netClosedCode  = "BALRUN_NET_CLOSED"
 )
 
 var errNetUnavailable = errors.New("[balrun]: raw network sockets are not supported in browser environments")
@@ -40,10 +38,7 @@ func (n *palNet) call(method string, args ...any) (js.Value, error) {
 	if n.proxy.Type() != js.TypeObject || n.proxy.IsNull() {
 		return js.Undefined(), errNetUnavailable
 	}
-	if n.proxy.Get(method).Type() != js.TypeFunction {
-		return js.Undefined(), fmt.Errorf("network platform does not implement %q", method)
-	}
-	return awaitPromise(n.proxy.Call(method, args...))
+	return callProxy(n.proxy, method, args...)
 }
 
 func (n *palNet) dial(ctx context.Context, network, address, localAddr string, tlsCfg *pal.TLSConfig) (net.Conn, error) {
@@ -53,7 +48,7 @@ func (n *palNet) dial(ctx context.Context, network, address, localAddr string, t
 	if err != nil {
 		return nil, err
 	}
-	return &wasmConn{proxy: result}, nil
+	return &wasmConn{netHandle{result, "tcp"}}, nil
 }
 
 func (n *palNet) listen(network, address string, tlsCfg *pal.ServerTLSConfig) (net.Listener, error) {
@@ -61,7 +56,7 @@ func (n *palNet) listen(network, address string, tlsCfg *pal.ServerTLSConfig) (n
 	if err != nil {
 		return nil, netHostError(err)
 	}
-	return &wasmListener{proxy: result}, nil
+	return &wasmListener{netHandle{result, "tcp"}}, nil
 }
 
 func (n *palNet) dialPacket(ctx context.Context, network, address, localAddr string) (net.Conn, error) {
@@ -71,7 +66,7 @@ func (n *palNet) dialPacket(ctx context.Context, network, address, localAddr str
 	if err != nil {
 		return nil, err
 	}
-	return &wasmPacket{proxy: result, connected: true}, nil
+	return &wasmPacket{netHandle{result, "udp"}, true}, nil
 }
 
 func (n *palNet) listenPacket(network, address string) (net.PacketConn, error) {
@@ -79,7 +74,7 @@ func (n *palNet) listenPacket(network, address string) (net.PacketConn, error) {
 	if err != nil {
 		return nil, netHostError(err)
 	}
-	return &wasmPacket{proxy: result}, nil
+	return &wasmPacket{netHandle{result, "udp"}, false}, nil
 }
 
 func (n *palNet) resolvePacketAddr(network, address string) (net.Addr, error) {
@@ -116,7 +111,38 @@ func dialWithContext(ctx context.Context, dial func(signal any) (js.Value, error
 	return result, nil
 }
 
-type wasmConn struct{ proxy js.Value }
+// netHandle holds what stream, listener and packet handles have in common.
+type netHandle struct {
+	proxy   js.Value
+	network string
+}
+
+func (h netHandle) Close() error { _, err := callProxy(h.proxy, "close"); return netHostError(err) }
+func (h netHandle) address(method string) net.Addr {
+	return addressFromJS(h.proxy.Call(method), h.network)
+}
+func (h netHandle) LocalAddr() net.Addr  { return h.address("localAddress") }
+func (h netHandle) RemoteAddr() net.Addr { return h.address("remoteAddress") }
+func (h netHandle) SetDeadline(t time.Time) error {
+	return errors.Join(h.SetReadDeadline(t), h.SetWriteDeadline(t))
+}
+func (h netHandle) SetReadDeadline(t time.Time) error {
+	return h.setDeadline("setReadDeadline", t)
+}
+func (h netHandle) SetWriteDeadline(t time.Time) error {
+	return h.setDeadline("setWriteDeadline", t)
+}
+
+// setDeadline is synchronous because the host applies a new deadline to operations
+// already in flight, as net.Conn requires.
+func (h netHandle) setDeadline(method string, t time.Time) error {
+	if !h.proxy.Call(method, deadlineMillis(t)).Bool() {
+		return net.ErrClosed
+	}
+	return nil
+}
+
+type wasmConn struct{ netHandle }
 
 func (c *wasmConn) Read(p []byte) (int, error) {
 	if len(p) == 0 {
@@ -126,11 +152,8 @@ func (c *wasmConn) Read(p []byte) (int, error) {
 	if err != nil {
 		return 0, netHostError(err)
 	}
-	if result.IsNull() || result.IsUndefined() {
+	if result.IsNull() {
 		return 0, io.EOF
-	}
-	if result.Get("byteLength").Type() != js.TypeNumber {
-		return 0, errors.New("network read result is not a byte array")
 	}
 	return js.CopyBytesToGo(p, result), nil
 }
@@ -143,34 +166,20 @@ func (c *wasmConn) Write(p []byte) (int, error) {
 	return result.Int(), nil
 }
 
-func (c *wasmConn) Close() error         { _, err := callProxy(c.proxy, "close"); return netHostError(err) }
-func (c *wasmConn) LocalAddr() net.Addr  { return proxyAddress(c.proxy, "localAddress", "tcp") }
-func (c *wasmConn) RemoteAddr() net.Addr { return proxyAddress(c.proxy, "remoteAddress", "tcp") }
-func (c *wasmConn) SetDeadline(t time.Time) error {
-	return setDeadlines(c.proxy, t, "setReadDeadline", "setWriteDeadline")
-}
-func (c *wasmConn) SetReadDeadline(t time.Time) error {
-	return setDeadlines(c.proxy, t, "setReadDeadline")
-}
-func (c *wasmConn) SetWriteDeadline(t time.Time) error {
-	return setDeadlines(c.proxy, t, "setWriteDeadline")
-}
-
-type wasmListener struct{ proxy js.Value }
+type wasmListener struct{ netHandle }
 
 func (l *wasmListener) Accept() (net.Conn, error) {
 	result, err := callProxy(l.proxy, "accept")
 	if err != nil {
 		return nil, netHostError(err)
 	}
-	return &wasmConn{proxy: result}, nil
+	return &wasmConn{netHandle{result, "tcp"}}, nil
 }
 
-func (l *wasmListener) Close() error   { _, err := callProxy(l.proxy, "close"); return netHostError(err) }
-func (l *wasmListener) Addr() net.Addr { return proxyAddress(l.proxy, "address", "tcp") }
+func (l *wasmListener) Addr() net.Addr { return l.address("address") }
 
 type wasmPacket struct {
-	proxy     js.Value
+	netHandle
 	connected bool
 }
 
@@ -182,22 +191,11 @@ func (p *wasmPacket) Write(b []byte) (int, error) {
 	return p.write(b, js.Undefined())
 }
 
-func (p *wasmPacket) Close() error        { _, err := callProxy(p.proxy, "close"); return netHostError(err) }
-func (p *wasmPacket) LocalAddr() net.Addr { return proxyAddress(p.proxy, "localAddress", "udp") }
 func (p *wasmPacket) RemoteAddr() net.Addr {
 	if !p.connected {
 		return nil
 	}
-	return proxyAddress(p.proxy, "remoteAddress", "udp")
-}
-func (p *wasmPacket) SetDeadline(t time.Time) error {
-	return setDeadlines(p.proxy, t, "setReadDeadline", "setWriteDeadline")
-}
-func (p *wasmPacket) SetReadDeadline(t time.Time) error {
-	return setDeadlines(p.proxy, t, "setReadDeadline")
-}
-func (p *wasmPacket) SetWriteDeadline(t time.Time) error {
-	return setDeadlines(p.proxy, t, "setWriteDeadline")
+	return p.address("remoteAddress")
 }
 
 func (p *wasmPacket) ReadFrom(b []byte) (int, net.Addr, error) {
@@ -205,18 +203,18 @@ func (p *wasmPacket) ReadFrom(b []byte) (int, net.Addr, error) {
 	if err != nil {
 		return 0, nil, netHostError(err)
 	}
-	if result.IsNull() || result.IsUndefined() {
-		return 0, nil, io.EOF
-	}
-	data := result.Get("data")
-	if data.Get("byteLength").Type() != js.TypeNumber {
-		return 0, nil, errors.New("packet read result is not a byte array")
-	}
-	return js.CopyBytesToGo(b, data), addressFromJS(result.Get("address"), "udp"), nil
+	return js.CopyBytesToGo(b, result.Get("data")), addressFromJS(result.Get("address"), p.network), nil
 }
 
 func (p *wasmPacket) WriteTo(b []byte, addr net.Addr) (int, error) {
-	return p.write(b, addressToJS(addr))
+	if p.connected {
+		return 0, net.ErrWriteToConnected
+	}
+	address, err := addressToJS(addr)
+	if err != nil {
+		return 0, err
+	}
+	return p.write(b, address)
 }
 
 func (p *wasmPacket) write(b []byte, address js.Value) (int, error) {
@@ -228,70 +226,31 @@ func (p *wasmPacket) write(b []byte, address js.Value) (int, error) {
 }
 
 func callProxy(proxy js.Value, method string, args ...any) (js.Value, error) {
-	result, err := callSync(proxy, method, args...)
-	if err != nil {
-		return js.Undefined(), err
-	}
-	return awaitPromise(result)
+	return awaitPromise(proxy.Call(method, args...))
 }
 
 type wasmAddr struct{ network, address string }
 
 func (a wasmAddr) Network() string { return a.network }
 func (a wasmAddr) String() string  { return a.address }
-func proxyAddress(proxy js.Value, method, network string) net.Addr {
-	result, err := callProxy(proxy, method)
-	if err != nil {
-		return wasmAddr{network: "unknown"}
-	}
-	return addressFromJS(result, network)
-}
 
 func addressFromJS(value js.Value, network string) net.Addr {
-	if value.Type() != js.TypeObject || value.IsNull() {
-		return wasmAddr{network: "unknown"}
-	}
-	address, port := value.Get("address"), value.Get("port")
-	if address.Type() != js.TypeString || port.Type() != js.TypeNumber {
-		return wasmAddr{network: "unknown"}
-	}
-	return wasmAddr{network: network, address: net.JoinHostPort(address.String(), strconv.Itoa(port.Int()))}
+	return wasmAddr{network: network, address: net.JoinHostPort(value.Get("address").String(), strconv.Itoa(value.Get("port").Int()))}
 }
 
-func addressToJS(addr net.Addr) js.Value {
+func addressToJS(addr net.Addr) (js.Value, error) {
 	if addr == nil {
-		return js.Undefined()
+		return js.Undefined(), errors.New("missing address")
 	}
 	host, port, err := net.SplitHostPort(addr.String())
 	if err != nil {
-		return js.Undefined()
+		return js.Undefined(), err
 	}
 	number, err := strconv.Atoi(port)
 	if err != nil {
-		return js.Undefined()
+		return js.Undefined(), err
 	}
-	return js.ValueOf(map[string]any{"address": host, "port": number})
-}
-
-// setDeadlines forwards to the host, which applies a new deadline to operations
-// already in flight, as net.Conn requires.
-func setDeadlines(proxy js.Value, t time.Time, methods ...string) error {
-	for _, method := range methods {
-		if _, err := callSync(proxy, method, deadlineMillis(t)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func callSync(proxy js.Value, method string, args ...any) (js.Value, error) {
-	if proxy.Type() != js.TypeObject || proxy.IsNull() {
-		return js.Undefined(), errors.New("network handle is unavailable")
-	}
-	if proxy.Get(method).Type() != js.TypeFunction {
-		return js.Undefined(), fmt.Errorf("network handle does not implement %q", method)
-	}
-	return proxy.Call(method, args...), nil
+	return js.ValueOf(map[string]any{"address": host, "port": number}), nil
 }
 
 type timeoutError struct{ error }
@@ -305,10 +264,18 @@ func netHostError(err error) error {
 		return nil
 	}
 	result := hostError(err)
-	switch {
-	case strings.Contains(result.Error(), netTimeoutMessage):
+	jsError, ok := errors.AsType[js.Error](err)
+	if !ok || jsError.Value.Type() != js.TypeObject {
+		return result
+	}
+	code := jsError.Value.Get("code")
+	if code.Type() != js.TypeString {
+		return result
+	}
+	switch code.String() {
+	case netTimeoutCode, "ETIMEDOUT":
 		return timeoutError{result}
-	case strings.Contains(result.Error(), netClosedMessage):
+	case netClosedCode:
 		return net.ErrClosed
 	}
 	return result

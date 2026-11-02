@@ -65,6 +65,21 @@ public function main() returns error? {
 		expect(exitCode).toBe(0);
 	}, 30_000);
 
+	test("reports a UDP connect failure when the client is created", async () => {
+		const { exitCode, stdout } = await runBallerina(`
+import ballerina/io;
+import ballerina/udp;
+
+public function main() {
+    udp:ConnectClient|udp:Error c = new ("255.255.255.255", 1);
+    io:println(c is error ? "failed" : "connected");
+}
+`);
+
+		expect(stdout).toBe("failed\n");
+		expect(exitCode).toBe(0);
+	}, 30_000);
+
 	test("exits after a read timeout when the program leaves its socket open", async () => {
 		const peer = createSocket("udp4");
 		await new Promise<void>((resolve) => peer.bind(0, "127.0.0.1", resolve));
