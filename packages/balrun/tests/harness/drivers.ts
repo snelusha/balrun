@@ -54,7 +54,7 @@ export const drivers: Record<string, CaseDriver> = {
 
 	"hosted/http/listener-v": {
 		during: async ({ bridge, listener }) => {
-			const { host, port } = await listener;
+			const { host, port } = await listener();
 			const origin = `http://${host}:${port}`;
 
 			const response = await fetch(`${origin}/ping`);
@@ -102,14 +102,14 @@ export const drivers: Record<string, CaseDriver> = {
 	},
 
 	"hosted/udp/external-peer-v": {
-		during: async ({ bridge }) => {
+		during: async ({ bridge, whileRunning }) => {
 			const peer = createSocket("udp4");
 			const reply = new Promise<string>((resolve) =>
 				peer.once("message", (message) => resolve(message.toString())),
 			);
 			const retry = setInterval(() => peer.send("ping", 19605, "127.0.0.1"), 50);
 			try {
-				assert.equal(await reply, "ping");
+				assert.equal(await whileRunning(reply), "ping");
 			} finally {
 				clearInterval(retry);
 				peer.close();

@@ -1,6 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
+import { Socket } from "node:dgram";
+import { readFileSync } from "node:fs";
 
 import { createNetPlatform } from "../src/net";
+import { WasmBridge } from "../src/wasm-bridge";
+import { caseSourcePath, runCase, discoverCases } from "./harness/corpus";
+import { drivers } from "./harness/drivers";
+import { MemFS } from "./memfs";
 
 import type { NetPlatform } from "../src/net";
 
@@ -95,7 +101,84 @@ describe("NodeNetPlatform", () => {
 		expect(await next).toBe("ECLOSED");
 	});
 
+	it("sends to this machine when a datagram has no host", async () => {
+		const server = await platform.bindDatagram({ host: "", port: 0 });
+		const received = server.receive();
+		await server.send(new TextEncoder().encode("self"), "", server.local.port);
+		expect(new TextDecoder().decode((await received).data)).toBe("self");
+		await server.close();
+	});
+
+	it("closes a datagram socket that fails to bind", async () => {
+		const taken = await platform.bindDatagram({ host: "127.0.0.1", port: 0 });
+		const close = spyOn(Socket.prototype, "close");
+		try {
+			await expect(
+				platform.bindDatagram({ host: "127.0.0.1", port: taken.local.port }),
+			).rejects.toMatchObject({ code: "EADDRINUSE" });
+			expect(close).toHaveBeenCalledTimes(1);
+		} finally {
+			close.mockRestore();
+		}
+		await taken.close();
+	});
+
 	it("exposes the host's CA bundle", async () => {
 		expect((await platform.rootCertificates()).length).toBeGreaterThan(0);
+	});
+});
+
+describe("host CA bundle", () => {
+	const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
+	const prototype = Object.getPrototypeOf(createNetPlatform()) as NetPlatform;
+
+	function corpusCase(name: string) {
+		const testCase = discoverCases().find((candidate) => candidate.name === name);
+		if (!testCase) throw new Error(`no corpus case ${name}`);
+		return testCase;
+	}
+
+	it("isn't needed for a custom CA", async () => {
+		const roots = spyOn(prototype, "rootCertificates");
+		try {
+			const name = "hosted/ldap/tls-custom-ca-v";
+			await runCase(await WasmBridge.load(WASM_PATH), corpusCase(name), drivers[name]);
+			expect(roots).not.toHaveBeenCalled();
+		} finally {
+			roots.mockRestore();
+		}
+	});
+
+	it("is retried after a failed load", async () => {
+		const name = "hosted/ldap/tls-unknown-ca-v";
+		const bridge = await WasmBridge.load(WASM_PATH);
+		const entry = "tls-unknown-ca-v.bal";
+		const source = readFileSync(caseSourcePath(name), "utf8");
+		const firstRun = async () => {
+			let stdout = "";
+			await bridge.run(new MemFS({ [entry]: source }), entry, {
+				colors: false,
+				stdout: {
+					write: (chunk) => {
+						stdout += chunk;
+					},
+				},
+			});
+			return stdout.trim();
+		};
+
+		const cleanup = await drivers[name]?.setup?.();
+		const roots = spyOn(prototype, "rootCertificates").mockRejectedValueOnce(
+			new Error("no bundle"),
+		);
+		try {
+			// The case prints whether the failure was about the certificate.
+			expect(await firstRun()).toBe("false");
+			expect(await firstRun()).toBe("true");
+			expect(roots).toHaveBeenCalledTimes(2);
+		} finally {
+			roots.mockRestore();
+			await cleanup?.();
+		}
 	});
 });

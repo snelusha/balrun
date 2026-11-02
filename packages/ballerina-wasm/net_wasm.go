@@ -23,11 +23,11 @@ type netDriver interface {
 
 func newPalNet(proxy js.Value, sockets *socketRegistry) pal.Net {
 	var driver netDriver = loopbackDriver{}
-	prepareTLS := func() {}
+	loadRoots := func() error { return nil }
 	if proxy.Type() == js.TypeObject && !proxy.IsNull() {
 		host := hostDriver{proxy: proxy}
 		driver = host
-		prepareTLS = host.loadFallbackRoots
+		loadRoots = host.loadFallbackRoots
 	}
 
 	return pal.Net{
@@ -43,7 +43,12 @@ func newPalNet(proxy js.Value, sockets *socketRegistry) pal.Net {
 			if tlsCfg == nil {
 				return registered, nil
 			}
-			prepareTLS()
+			if len(tlsCfg.CACertPEM) == 0 && !tlsCfg.InsecureSkipVerify {
+				if err := loadRoots(); err != nil {
+					_ = registered.Close()
+					return nil, err
+				}
+			}
 			return upgradeClientTLS(ctx, registered, address, *tlsCfg)
 		},
 		Listen: func(network, address string, tlsCfg *pal.ServerTLSConfig) (net.Listener, error) {
@@ -203,6 +208,10 @@ func (loopbackDriver) dial(ctx context.Context, network, address, localAddr stri
 	}
 	dialer := net.Dialer{}
 	if localAddr != "" {
+		localAddr, err := loopbackAddress(localAddr)
+		if err != nil {
+			return nil, err
+		}
 		addr, err := net.ResolveTCPAddr(network, localAddr)
 		if err != nil {
 			return nil, err
@@ -227,6 +236,10 @@ func (loopbackDriver) dialPacket(ctx context.Context, network, address, localAdd
 	}
 	dialer := net.Dialer{}
 	if localAddr != "" {
+		localAddr, err := loopbackAddress(localAddr)
+		if err != nil {
+			return nil, err
+		}
 		addr, err := net.ResolveUDPAddr(network, localAddr)
 		if err != nil {
 			return nil, err

@@ -3,6 +3,7 @@
 	"private": true,
 	"scripts": {
 		"build": "bun scripts/build.ts",
+		"test": "GOOS=js GOARCH=wasm go test -exec \"$(go env GOROOT)/lib/wasm/go_js_wasm_exec\" .",
 		"clean": "git clean -xdf .turbo dist",
 		"typecheck": "bun check"
 	},

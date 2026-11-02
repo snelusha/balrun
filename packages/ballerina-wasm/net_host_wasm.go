@@ -11,11 +11,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall/js"
 	"time"
 )
 
 const closedSocketCode = "ECLOSED"
+
+var errWriteAbandoned = errors.New("stream is unusable for writing after a write timed out")
 
 var hostErrorText = map[string]string{
 	"EACCES":        "permission denied",
@@ -52,25 +55,36 @@ type hostDriver struct {
 	proxy js.Value
 }
 
-var fallbackRootsOnce sync.Once
+var (
+	fallbackRootsMu     sync.Mutex
+	fallbackRootsLoaded bool
+)
 
 // loadFallbackRoots supplies the host's CA bundle, because crypto/x509 has no
 // system roots on js/wasm and would otherwise reject every public certificate.
-func (d hostDriver) loadFallbackRoots() {
-	fallbackRootsOnce.Do(func() {
-		certificates, err := awaitPromise(d.proxy.Call("rootCertificates"))
-		if err != nil {
-			return
-		}
-		pool := x509.NewCertPool()
-		loaded := false
-		for i := 0; i < certificates.Length(); i++ {
-			loaded = pool.AppendCertsFromPEM([]byte(certificates.Index(i).String())) || loaded
-		}
-		if loaded {
-			x509.SetFallbackRoots(pool)
-		}
-	})
+// A failure is retried on the next connection, since SetFallbackRoots can only
+// be called once but only a success calls it.
+func (d hostDriver) loadFallbackRoots() error {
+	fallbackRootsMu.Lock()
+	defer fallbackRootsMu.Unlock()
+	if fallbackRootsLoaded {
+		return nil
+	}
+	certificates, err := awaitPromise(d.proxy.Call("rootCertificates"))
+	if err != nil {
+		return fmt.Errorf("loading the host's CA certificates: %w", hostError(err))
+	}
+	pool := x509.NewCertPool()
+	loaded := false
+	for i := 0; i < certificates.Length(); i++ {
+		loaded = pool.AppendCertsFromPEM([]byte(certificates.Index(i).String())) || loaded
+	}
+	if !loaded {
+		return errors.New("loading the host's CA certificates: no valid certificates found")
+	}
+	x509.SetFallbackRoots(pool)
+	fallbackRootsLoaded = true
+	return nil
 }
 
 func (d hostDriver) dial(ctx context.Context, network, address, localAddr string) (net.Conn, error) {
@@ -88,6 +102,11 @@ func (d hostDriver) dial(ctx context.Context, network, address, localAddr string
 		localHost, localPort, err := splitAddress(localAddr)
 		if err != nil {
 			return nil, err
+		}
+		if localHost != "" {
+			if localHost, err = d.resolveIP(ctx, localHost, family); err != nil {
+				return nil, dialError(network, address, err)
+			}
 		}
 		options["localHost"] = localHost
 		options["localPort"] = localPort
@@ -219,9 +238,9 @@ func (d hostDriver) resolveIP(ctx context.Context, host string, family int) (str
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	addresses, err := awaitPromise(d.proxy.Call("lookup", host, family))
+	addresses, err := d.lookup(ctx, host, family)
 	if err != nil {
-		return "", fmt.Errorf("lookup %s: %w", host, hostNetError(err))
+		return "", err
 	}
 	first := ""
 	for i := 0; i < addresses.Length(); i++ {
@@ -237,6 +256,30 @@ func (d hostDriver) resolveIP(ctx context.Context, host string, family int) (str
 		return "", fmt.Errorf("lookup %s: no such host", host)
 	}
 	return first, nil
+}
+
+// lookup returns as soon as ctx ends. The host lookup can't be cancelled and its
+// late result is dropped, which is safe because it holds no resources.
+func (d hostDriver) lookup(ctx context.Context, host string, family int) (js.Value, error) {
+	type result struct {
+		addresses js.Value
+		err       error
+	}
+	promise := d.proxy.Call("lookup", host, family)
+	done := make(chan result, 1)
+	go func() {
+		addresses, err := awaitPromise(promise)
+		done <- result{addresses, err}
+	}()
+	select {
+	case r := <-done:
+		if r.err != nil {
+			return js.Value{}, fmt.Errorf("lookup %s: %w", host, hostNetError(r.err))
+		}
+		return r.addresses, nil
+	case <-ctx.Done():
+		return js.Value{}, fmt.Errorf("lookup %s: %w", host, ctx.Err())
+	}
 }
 
 func networkFamily(network, protocol string) (int, error) {
@@ -497,6 +540,8 @@ type streamConn struct {
 	pendingMu sync.Mutex
 	pending   []byte
 	writeSlot chan struct{}
+
+	writeAbandoned atomic.Bool
 }
 
 func newStreamConn(network string, socket js.Value) *streamConn {
@@ -576,6 +621,9 @@ func (c *streamConn) Write(p []byte) (int, error) {
 	if err := c.checkOpen(c.writeLimit); err != nil {
 		return 0, c.opError("write", c.remote, err)
 	}
+	if c.writeAbandoned.Load() {
+		return 0, c.opError("write", c.remote, errWriteAbandoned)
+	}
 	if len(p) == 0 {
 		return 0, nil
 	}
@@ -588,6 +636,11 @@ func (c *streamConn) Write(p []byte) (int, error) {
 	}
 	promise := c.socket.Call("write", bytesToJS(p))
 	if err := c.awaitWrite(promise, func() { <-c.writeSlot }); err != nil {
+		// The host still holds these bytes and may yet send them, so a retry could
+		// duplicate data. Refuse further writes, as crypto/tls does after a timeout.
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			c.writeAbandoned.Store(true)
+		}
 		return 0, c.opError("write", c.remote, err)
 	}
 	return len(p), nil

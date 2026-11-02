@@ -319,6 +319,8 @@ class NodeDatagramSocket implements DatagramSocket {
 
 	/** An IPv6 socket can only reach an IPv4 peer through its mapped address. */
 	private sendHost(host: string): string {
+		// Like Go, an address with no host means this machine.
+		if (!host) return this.isIPv6 ? "::1" : "127.0.0.1";
 		return this.isIPv6 && !isIPv6(host) ? `::ffff:${host}` : host;
 	}
 
@@ -360,9 +362,13 @@ async function createBoundSocket(
 	if (!host && !port) return socket;
 
 	return new Promise((resolve, reject) => {
-		socket.once("error", reject);
+		const onError = (error: Error) => {
+			socket.close();
+			reject(error);
+		};
+		socket.once("error", onError);
 		socket.bind({ address: host || undefined, port: integerPort(port ?? 0) }, () => {
-			socket.off("error", reject);
+			socket.off("error", onError);
 			resolve(socket);
 		});
 	});

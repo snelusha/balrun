@@ -1,11 +1,16 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 
 import { WasmBridge } from "../src/wasm-bridge";
-import { discoverCases, findCorpusProblems, runCase, skipReason } from "./harness/corpus";
+import {
+	CASE_TIMEOUT_MS,
+	discoverCases,
+	findCorpusProblems,
+	runCase,
+	skipReason,
+} from "./harness/corpus";
 import { drivers } from "./harness/drivers";
 
 const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
-const CASE_TIMEOUT_MS = 30_000;
 
 const cases = discoverCases();
 
@@ -24,7 +29,8 @@ describe("corpus", () => {
 		it.skipIf(skipReason(testCase) !== undefined)(
 			testCase.name,
 			() => runCase(bridge, testCase, drivers[testCase.name]),
-			CASE_TIMEOUT_MS,
+			// A repeated case can use its whole limit on each run, plus the stop grace period.
+			CASE_TIMEOUT_MS * ((drivers[testCase.name]?.runs ?? 1) + 1),
 		);
 	}
 });

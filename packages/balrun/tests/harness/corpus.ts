@@ -19,7 +19,11 @@ const OUTPUT_MARKER = /\/\/\s*@output\b[ \t]?(.*)$/;
 const REQUIRES_MARKER = /\/\/\s*@requires\s+(\S+)/;
 /** Reserved for corpus programs, so the check below can tell when two cases collide. */
 const CORPUS_PORT = /\b19[6-9]\d\d\b/g;
+const COMPILE_ERROR = /^error\[/m;
+const PANIC = /^error: .*\n\s+at /m;
 const STOPPED_EXIT_CODE = 130;
+const STOP_GRACE_MS = 5_000;
+export const CASE_TIMEOUT_MS = 20_000;
 
 export interface CorpusCase {
 	name: string;
@@ -32,15 +36,21 @@ export interface CorpusCase {
 
 export interface CaseContext {
 	bridge: WasmBridge;
-	/** Resolves once stdout contains `text`. */
+	/** Resolves once stdout contains `text`. Rejects if the program exits first. */
 	stdout(text: string): Promise<void>;
-	listener: Promise<HTTPListenerReady>;
+	/** Resolves once a listener is ready. Rejects if the program exits first. */
+	listener(): Promise<HTTPListenerReady>;
+	/** Settles with `promise`, or rejects if the program exits first. */
+	whileRunning<T>(promise: Promise<T>): Promise<T>;
 }
 
 /** What a program needs from outside Ballerina. */
 export interface CaseDriver {
 	setup?(): Promise<() => void | Promise<void>>;
-	/** Runs alongside the program, for whatever must reach it or stop it. */
+	/**
+	 * Runs alongside the program, for whatever must reach it or stop it. Only these
+	 * cases may exit as stopped. If this fails, the harness stops the program.
+	 */
 	during?(context: CaseContext): Promise<void>;
 	/** Additional files for the run, as names mapped to files in testdata/certs. */
 	certs?: Record<string, string>;
@@ -149,21 +159,7 @@ async function runOnce(
 	const listener = new Promise<HTTPListenerReady>((resolve) => {
 		listenerReady = resolve;
 	});
-	const context: CaseContext = {
-		bridge,
-		listener,
-		stdout: (text) =>
-			new Promise((resolve) => {
-				const check = () => {
-					if (!stdout.includes(text)) return;
-					stdoutWaiters.delete(check);
-					resolve();
-				};
-				stdoutWaiters.add(check);
-				check();
-			}),
-	};
-
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	const host = globalThis.process;
 	// A browser has no `process`, which is how the runtime detects one.
 	if (testCase.browser) Reflect.set(globalThis, "process", undefined);
@@ -183,9 +179,61 @@ async function runOnce(
 			},
 			onListenerReady: (ready) => listenerReady(ready),
 		});
-		const [exitCode] = await Promise.all([run, driver.during?.(context)]);
-		return { stdout, stderr, exitcode: String(exitCode) };
+		const exited = run.then(
+			() => {},
+			() => {},
+		);
+		const whileRunning = <T>(promise: Promise<T>) =>
+			Promise.race([
+				promise,
+				exited.then((): never => {
+					throw new Error(`${testCase.name}: program exited while its driver was waiting`);
+				}),
+			]);
+		const during = driver.during?.({
+			bridge,
+			whileRunning,
+			listener: () => whileRunning(listener),
+			stdout: (text) =>
+				whileRunning(
+					new Promise<void>((resolve) => {
+						const check = () => {
+							if (!stdout.includes(text)) return;
+							stdoutWaiters.delete(check);
+							resolve();
+						};
+						stdoutWaiters.add(check);
+						check();
+					}),
+				),
+		});
+		const finished = Promise.allSettled([
+			run,
+			during?.catch((error) => {
+				bridge.stop("immediate");
+				throw error;
+			}),
+		]);
+		const timedOut = new Promise<never>((_, reject) => {
+			timer = setTimeout(async () => {
+				bridge.stop("immediate");
+				await Promise.race([
+					finished,
+					new Promise((resolve) => setTimeout(resolve, STOP_GRACE_MS)),
+				]);
+				reject(
+					new Error(
+						`${testCase.name}: timed out after ${CASE_TIMEOUT_MS}ms\n--- stdout ---\n${stdout}\n--- stderr ---\n${stderr}`,
+					),
+				);
+			}, CASE_TIMEOUT_MS);
+		});
+		const [exit, driven] = await Promise.race([finished, timedOut]);
+		if (driven.status === "rejected") throw driven.reason;
+		if (exit.status === "rejected") throw exit.reason;
+		return { stdout, stderr, exitcode: String(exit.value) };
 	} finally {
+		clearTimeout(timer);
 		if (testCase.browser) Reflect.set(globalThis, "process", host);
 	}
 }
@@ -199,10 +247,11 @@ function mismatch(label: string, expected: string, actual: string): Error {
 }
 
 /** Holds in update mode too, so a golden can't be regenerated from wrong output. */
-function checkSourceExpectations(
-	testCase: CorpusCase,
+export function checkSourceExpectations(
+	testCase: Pick<CorpusCase, "name">,
 	sources: Record<string, string>,
 	result: CaseResult,
+	driver: CaseDriver = {},
 ) {
 	const outputs = balSources(sources).map((source) =>
 		source.split("\n").flatMap((line) => {
@@ -222,11 +271,19 @@ function checkSourceExpectations(
 	const exitCode = Number(result.exitcode);
 	const kind = CASE_NAME.exec(testCase.name)?.[1];
 	if (!kind) throw new Error(`${testCase.name}: name must end in -v, -e, or -p`);
-	const valid = exitCode === 0 || exitCode === STOPPED_EXIT_CODE;
-	if (kind === "v" ? !valid : valid) {
-		throw new Error(
-			`${testCase.name}: unexpected exit code ${exitCode} for a -${kind} case\n${result.stderr}`,
-		);
+	const problem = {
+		v: () =>
+			exitCode === 0 || (exitCode === STOPPED_EXIT_CODE && driver.during)
+				? undefined
+				: "should exit cleanly",
+		e: () =>
+			exitCode === 1 && !result.stdout && COMPILE_ERROR.test(result.stderr)
+				? undefined
+				: "should fail to compile",
+		p: () => (exitCode === 1 && PANIC.test(result.stderr) ? undefined : "should panic"),
+	}[kind as "v" | "e" | "p"]();
+	if (problem) {
+		throw new Error(`${testCase.name}: ${problem}, but exited with ${exitCode}\n${result.stderr}`);
 	}
 }
 
@@ -270,7 +327,7 @@ export async function runCase(bridge: WasmBridge, testCase: CorpusCase, driver: 
 	try {
 		for (let run = 0; run < (driver.runs ?? 1); run++) {
 			const result = await runOnce(bridge, testCase, driver, sources);
-			checkSourceExpectations(testCase, sources, result);
+			checkSourceExpectations(testCase, sources, result, driver);
 			if (update) writeGolden(testCase, result);
 			else checkGolden(testCase, result);
 		}
