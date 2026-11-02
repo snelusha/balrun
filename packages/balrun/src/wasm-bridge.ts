@@ -6,6 +6,7 @@ import type {
 	BallerinaStopMode,
 } from "./ballerina-core";
 import { createHTTPListenerTransport } from "./http-listener";
+import { createNetPlatform } from "./net";
 import { createOSPlatform } from "./os";
 
 import type {
@@ -15,6 +16,7 @@ import type {
 	HTTPListenerRequest,
 	HTTPListenerResponse,
 } from "./http-listener";
+import type { NetPlatform } from "./net";
 import type { OSPlatform } from "./os";
 import type { FS } from "./fs/core";
 
@@ -23,6 +25,7 @@ const NODE_FS_PROMISES_MODULE = "node:fs/promises";
 interface WasmPlatform {
 	httpListenerTransport: HTTPListenerTransport;
 	os: OSPlatform;
+	net?: NetPlatform;
 }
 
 interface WasmRunOptions extends BallerinaRunOptions {
@@ -51,7 +54,7 @@ export class WasmBridge implements BallerinaCore {
 	private onListenerReady: ((listener: HTTPListenerReady) => void) | undefined;
 	private activeRun = false;
 
-	private platform: Omit<WasmPlatform, "os"> = {
+	private platform: Omit<WasmPlatform, "os" | "net"> = {
 		httpListenerTransport: createHTTPListenerTransport(
 			(listener, request) =>
 				this.exports.dispatchHttpRequest(listener.host, listener.port, request),
@@ -86,7 +89,11 @@ export class WasmBridge implements BallerinaCore {
 		try {
 			return await this.exports.run(proxy, path, {
 				...runOptions,
-				platform: { ...this.platform, os: createOSPlatform(runOptions.env) },
+				platform: {
+					...this.platform,
+					os: createOSPlatform(runOptions.env),
+					net: createNetPlatform(),
+				},
 			});
 		} finally {
 			this.activeRun = false;

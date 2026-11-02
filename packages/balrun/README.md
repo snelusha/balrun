@@ -172,6 +172,19 @@ const running = ballerina.run("service.bal", {
 await running;
 ```
 
+### Network sockets
+
+The Ballerina `udp` and `ldap` modules use raw TCP, TLS, and UDP sockets.
+
+| Environment     | Behaviour                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------- |
+| Node.js and Bun | Real sockets. TLS runs inside the interpreter and trusts the runtime's CA bundle by default.  |
+| Browsers        | Sockets opened by the same run can reach each other. Any other host fails with a clear error. |
+
+- Sockets still open when a run ends are closed for you, so their ports are free for the next run.
+- In browsers, `localhost` means `127.0.0.1`, so an IPv6 `::1` peer can't reach a listener bound to all interfaces.
+- WASM is single-threaded: CPU-heavy Ballerina code delays socket deadlines and incoming data until it yields.
+
 ### `wasmSource` / `core`
 
 By default, `Ballerina` loads the bundled `ballerina.wasm`. Pass `wasmSource` to load a different local path or HTTP(S) URL:

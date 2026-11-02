@@ -11,7 +11,7 @@ import (
 
 var processStart = time.Now()
 
-func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.SignalSource, httpListenerTransport, osProxy js.Value) pal.Platform {
+func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.SignalSource, httpListenerTransport, osProxy, netProxy js.Value, sockets *socketRegistry) pal.Platform {
 	palFS := &palFS{cwd: cwd, fsys: fsys}
 
 	return pal.Platform{
@@ -33,6 +33,7 @@ func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.Si
 				return listen(httpListenerTransport, cfg, handler)
 			},
 		},
+		Net: newPalNet(netProxy, sockets),
 		Time: pal.Time{
 			Now:          time.Now,
 			MonotonicNow: func() time.Duration { return time.Since(processStart) },
