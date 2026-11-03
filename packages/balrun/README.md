@@ -176,10 +176,10 @@ await running;
 
 The Ballerina `udp` and `ldap` modules use raw TCP, TLS, and UDP sockets.
 
-| Environment     | Behaviour                                                                                     |
-| --------------- | --------------------------------------------------------------------------------------------- |
-| Node.js and Bun | Real sockets. TLS runs inside the interpreter and trusts the runtime's CA bundle by default.  |
-| Browsers        | Sockets opened by the same run can reach each other. Any other host fails with a clear error. |
+| Environment     | Behaviour                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js and Bun | Real sockets. TLS runs inside the interpreter and trusts the runtime's default CAs by default, including `NODE_EXTRA_CA_CERTS`. |
+| Browsers        | Sockets opened by the same run can reach each other. Any other host fails with a clear error.                                   |
 
 - Sockets still open when a run ends are closed for you, so their ports are free for the next run.
 - In browsers, `localhost` means `127.0.0.1`, so an IPv6 `::1` peer can't reach a listener bound to all interfaces.

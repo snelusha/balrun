@@ -92,7 +92,7 @@ function toCase(sourcePath: string): CorpusCase {
 	};
 }
 
-function readSources(testCase: CorpusCase): Record<string, string> {
+export function readSources(testCase: CorpusCase): Record<string, string> {
 	if (!testCase.isProject) {
 		const name = testCase.sourcePath.slice(dirname(testCase.sourcePath).length + 1);
 		return { [name]: readFileSync(testCase.sourcePath, "utf8") };
@@ -111,6 +111,12 @@ function readSources(testCase: CorpusCase): Record<string, string> {
 	};
 	walk(testCase.sourcePath);
 	return files;
+}
+
+export function entryPoint(testCase: CorpusCase, sources: Record<string, string>): string {
+	const entry = testCase.isProject ? "." : Object.keys(sources)[0];
+	if (!entry) throw new Error(`${testCase.name}: no source files`);
+	return entry;
 }
 
 function balSources(sources: Record<string, string>): string[] {
@@ -149,8 +155,7 @@ async function runOnce(
 	for (const [name, certificate] of Object.entries(driver.certs ?? {})) {
 		files[name] = readFileSync(join(CERTS_DIR, certificate), "utf8");
 	}
-	const entry = testCase.isProject ? "." : Object.keys(sources)[0];
-	if (!entry) throw new Error(`${testCase.name}: no source files`);
+	const entry = entryPoint(testCase, sources);
 
 	let stdout = "";
 	let stderr = "";
@@ -287,7 +292,7 @@ export function checkSourceExpectations(
 	}
 }
 
-function checkGolden(testCase: CorpusCase, result: CaseResult) {
+export function checkGolden(testCase: CorpusCase, result: CaseResult) {
 	if (!existsSync(testCase.goldenPath)) {
 		throw new Error(`${testCase.name}: no golden; run \`bun run test:update\` to create it`);
 	}

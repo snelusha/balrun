@@ -1,4 +1,5 @@
 import { NodeFS } from "./fs/node";
+import { isNodeRuntime } from "./runtime";
 
 import { BALRUN_VERSION } from "./version";
 
@@ -80,7 +81,7 @@ export class Ballerina {
 
 	private async fs(): Promise<FS> {
 		if (this._fs) return this._fs;
-		if (!supportsNodeFS())
+		if (!isNodeRuntime())
 			throw new Error("[balrun]: `fs` option is required outside Node-compatible environments.");
 
 		const fs = new NodeFS();
@@ -111,8 +112,4 @@ export class Ballerina {
 	async dispatchHttpRequest(request: HTTPDispatchRequest): Promise<HTTPListenerResponse> {
 		return (await this.bridge()).dispatchHttpRequest(request);
 	}
-}
-
-function supportsNodeFS(): boolean {
-	return typeof process !== "undefined" && !!process.versions?.node;
 }

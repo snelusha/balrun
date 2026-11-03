@@ -57,6 +57,7 @@
 		"build": "tsdown && cp ../ballerina-wasm/dist/ballerina.wasm dist/ballerina.wasm",
 		"test": "bun test --isolate",
 		"test:node": "node tests/node-corpus.mjs",
+		"test:browser": "bun tests/browser/run.ts",
 		"test:update": "UPDATE_CORPUS=1 bun test --isolate tests/corpus.test.ts",
 		"typecheck": "bun check",
 		"clean": "git clean -xdf .turbo dist"
@@ -67,6 +68,7 @@
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
 		"happy-dom": "^20.14.5",
+		"playwright": "^1.64.1",
 		"react": "catalog:",
 		"react-dom": "catalog:",
 		"tsdown": "^0.23.0",

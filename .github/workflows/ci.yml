@@ -59,3 +59,10 @@ jobs:
 
       - name: Test on Node.js
         run: bun run --filter @snelusha/balrun test:node
+
+      - name: Install Chromium
+        working-directory: packages/balrun
+        run: bunx playwright install --with-deps chromium-headless-shell
+
+      - name: Test in Chromium
+        run: bun run --filter @snelusha/balrun test:browser

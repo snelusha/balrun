@@ -1,3 +1,4 @@
+import { isNodeRuntime } from "./runtime";
 import type {
 	BallerinaCore,
 	BallerinaRunOptions,
@@ -47,6 +48,23 @@ type GoRuntime = Go & {
 	_scheduledTimeouts?: Map<number, ReturnType<typeof setTimeout>>;
 };
 
+const SCHEDULE_TIMEOUT_IMPORT = "runtime.scheduleTimeoutEvent";
+
+/** A goroutine left over from a run can schedule timers after it ends, which shouldn't keep Node.js alive. */
+export function unrefTimeoutsWhileIdle(go: GoRuntime, isIdle: () => boolean): void {
+	const imports = go.importObject.gojs as Record<string, (sp: number) => void>;
+	const schedule = imports[SCHEDULE_TIMEOUT_IMPORT];
+	if (!schedule) return;
+	imports[SCHEDULE_TIMEOUT_IMPORT] = (sp) => {
+		const known = new Set(go._scheduledTimeouts?.keys());
+		schedule(sp);
+		if (!isIdle()) return;
+		for (const [id, timeout] of go._scheduledTimeouts ?? []) {
+			if (!known.has(id)) (timeout as { unref?: () => void }).unref?.();
+		}
+	};
+}
+
 export class WasmBridge implements BallerinaCore {
 	private exports: WasmExports = {} as WasmExports;
 	private go: GoRuntime | null = null;
@@ -65,10 +83,11 @@ export class WasmBridge implements BallerinaCore {
 	static async load(source: string | Response | PromiseLike<Response>): Promise<WasmBridge> {
 		await import("./wasm_exec");
 		const go = new Go();
-		const instance = await loadWasm(source, go.importObject);
-		go.run(instance);
 		const bridge = new WasmBridge();
 		bridge.go = go;
+		unrefTimeoutsWhileIdle(go, () => !bridge.activeRun);
+		const instance = await loadWasm(source, go.importObject);
+		go.run(instance);
 		// FIXME: `stop()` conflicts with DOM `window.stop()`
 		bridge.exports = { ...globalThis } as unknown as WasmExports;
 		return bridge;
@@ -176,11 +195,8 @@ async function loadFromResponse(
 }
 
 function shouldFetch(source: string): boolean {
-	const isNodeRuntime =
-		typeof process !== "undefined" && typeof process.versions?.node === "string";
-
 	// In a browser environment, we can assume all string sources are URLs.
-	if (!isNodeRuntime && typeof window !== "undefined") return true;
+	if (!isNodeRuntime() && typeof window !== "undefined") return true;
 	try {
 		const url = new URL(source);
 		return url.protocol === "http:" || url.protocol === "https:";

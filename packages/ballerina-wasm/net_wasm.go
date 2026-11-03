@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"syscall/js"
+	"time"
 
 	"github.com/ballerina-nutcracker/ballerina/platform/pal"
 )
@@ -90,6 +91,8 @@ func newPalNet(proxy js.Value, sockets *socketRegistry) pal.Net {
 	}
 }
 
+var socketCloseTimeout = 5 * time.Second
+
 // socketRegistry closes whatever a run leaves open. Native programs rely on
 // process exit for this, but a WASM run shares its process with the host: an
 // open socket would hold its port and keep Node.js from exiting.
@@ -128,8 +131,25 @@ func (r *socketRegistry) closeAll() {
 		open = append(open, socket)
 	}
 	r.mu.Unlock()
+
+	// A close that panics or never settles must not stop the run from finishing.
+	var closing sync.WaitGroup
 	for _, socket := range open {
-		_ = socket.Close()
+		closing.Go(func() {
+			defer func() { _ = recover() }()
+			_ = socket.Close()
+		})
+	}
+	closed := make(chan struct{})
+	go func() {
+		closing.Wait()
+		close(closed)
+	}()
+	timeout := time.NewTimer(socketCloseTimeout)
+	defer timeout.Stop()
+	select {
+	case <-closed:
+	case <-timeout.C:
 	}
 }
 
@@ -202,23 +222,9 @@ func (l *registeredListener) Close() error {
 type loopbackDriver struct{}
 
 func (loopbackDriver) dial(ctx context.Context, network, address, localAddr string) (net.Conn, error) {
-	address, err := loopbackAddress(address)
-	if err != nil {
-		return nil, err
-	}
-	dialer := net.Dialer{}
-	if localAddr != "" {
-		localAddr, err := loopbackAddress(localAddr)
-		if err != nil {
-			return nil, err
-		}
-		addr, err := net.ResolveTCPAddr(network, localAddr)
-		if err != nil {
-			return nil, err
-		}
-		dialer.LocalAddr = addr
-	}
-	return dialer.DialContext(ctx, network, address)
+	return dialLoopback(ctx, network, address, localAddr, func(network, address string) (net.Addr, error) {
+		return net.ResolveTCPAddr(network, address)
+	})
 }
 
 func (loopbackDriver) listen(network, address string) (net.Listener, error) {
@@ -230,6 +236,12 @@ func (loopbackDriver) listen(network, address string) (net.Listener, error) {
 }
 
 func (loopbackDriver) dialPacket(ctx context.Context, network, address, localAddr string) (net.Conn, error) {
+	return dialLoopback(ctx, network, address, localAddr, func(network, address string) (net.Addr, error) {
+		return net.ResolveUDPAddr(network, address)
+	})
+}
+
+func dialLoopback(ctx context.Context, network, address, localAddr string, resolve func(network, address string) (net.Addr, error)) (net.Conn, error) {
 	address, err := loopbackAddress(address)
 	if err != nil {
 		return nil, err
@@ -240,11 +252,9 @@ func (loopbackDriver) dialPacket(ctx context.Context, network, address, localAdd
 		if err != nil {
 			return nil, err
 		}
-		addr, err := net.ResolveUDPAddr(network, localAddr)
-		if err != nil {
+		if dialer.LocalAddr, err = resolve(network, localAddr); err != nil {
 			return nil, err
 		}
-		dialer.LocalAddr = addr
 	}
 	return dialer.DialContext(ctx, network, address)
 }

@@ -1,5 +1,7 @@
 import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from "node:http";
 
+import { isNodeRuntime } from "./runtime";
+
 const NODE_HTTP_MODULE = "node:http";
 const MAX_REQUEST_BODY_SIZE = 1024 * 1024;
 
@@ -65,7 +67,7 @@ export function createHTTPListenerTransport(
 		async listen(config) {
 			const key = listenerKey(config);
 			if (listeners.has(key)) throw new Error(`listener already exists: ${key}`);
-			if (!supportsNodeHTTP()) {
+			if (!isNodeRuntime()) {
 				listeners.set(key, { endpoint: config, address: config });
 				onListenerReady?.(config);
 				return;
@@ -223,10 +225,6 @@ function headersFromNode(headers: IncomingHttpHeaders): Record<string, string[]>
 		if (value !== undefined) result[name] = Array.isArray(value) ? value : [value];
 	}
 	return result;
-}
-
-function supportsNodeHTTP(): boolean {
-	return typeof process !== "undefined" && !!process.versions?.node;
 }
 
 async function readBody(request: IncomingMessage): Promise<Uint8Array | undefined> {

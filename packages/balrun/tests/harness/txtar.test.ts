@@ -11,6 +11,14 @@ describe("txtar", () => {
 		]);
 	});
 
+	it("round-trips lines that read as markers", () => {
+		const files = [
+			{ name: "stdout", data: "ok\n-- stderr --\n\\-- stderr --\n\\\\-- a --\n" },
+			{ name: "stderr", data: "" },
+		];
+		expect(parseTxtar(formatTxtar(files))).toEqual(files);
+	});
+
 	it("ignores text before the first section", () => {
 		expect(parseTxtar("comment\n-- a --\nx\n")).toEqual([{ name: "a", data: "x\n" }]);
 	});

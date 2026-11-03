@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { fileURLToPath } from "node:url";
 
-import { WasmBridge } from "../src/wasm-bridge";
+import { unrefTimeoutsWhileIdle, WasmBridge } from "../src/wasm-bridge";
 import { MemFS } from "./memfs";
 
 import type { WasmExports } from "../src/wasm-bridge";
@@ -120,5 +120,41 @@ describe("WasmBridge", () => {
 			expect(exitCode).toBe(1);
 			expect(stderr.join("")).toBe("error: open missing.bal: file does not exist\n");
 		});
+	});
+});
+
+describe("unrefTimeoutsWhileIdle", () => {
+	function fakeGo() {
+		const timeouts = new Map<number, ReturnType<typeof setTimeout>>();
+		let nextId = 0;
+		const go = {
+			_scheduledTimeouts: timeouts,
+			importObject: {
+				gojs: {
+					"runtime.scheduleTimeoutEvent": () => {
+						timeouts.set(
+							nextId++,
+							setTimeout(() => {}, 60_000),
+						);
+					},
+				},
+			},
+		};
+		const schedule = () => go.importObject.gojs["runtime.scheduleTimeoutEvent"]();
+		return { go: go as never, timeouts, schedule };
+	}
+
+	it("only holds the process open for timers scheduled during a run", () => {
+		let idle = true;
+		const { go, timeouts, schedule } = fakeGo();
+		unrefTimeoutsWhileIdle(go, () => idle);
+
+		schedule();
+		idle = false;
+		schedule();
+		const [whileIdle, whileRunning] = [...timeouts.values()];
+		expect(whileIdle?.hasRef()).toBe(false);
+		expect(whileRunning?.hasRef()).toBe(true);
+		for (const timeout of timeouts.values()) clearTimeout(timeout);
 	});
 });

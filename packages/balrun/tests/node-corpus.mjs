@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { WasmBridge } from "../dist/index.mjs";
-import { caseSourcePath, discoverCases, runCase, skipReason } from "./harness/corpus.ts";
+import { caseSourcePath, certPath, discoverCases, runCase, skipReason } from "./harness/corpus.ts";
 import { drivers } from "./harness/drivers.ts";
 
 const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
@@ -42,6 +42,28 @@ if (cliExit === 0) passed++;
 else {
 	failures.push("cli exits with a socket left open");
 	console.error(`FAIL CLI with a socket left open: exit ${cliExit}`);
+}
+
+// Certificates the host trusts through NODE_EXTRA_CA_CERTS must reach the interpreter.
+const unknownCA = "hosted/ldap/tls-unknown-ca-v";
+const stopServer = await drivers[unknownCA].setup();
+const trusting = spawn(process.execPath, [CLI_PATH, caseSourcePath(unknownCA)], {
+	env: { ...process.env, NODE_EXTRA_CA_CERTS: certPath("server-cert.pem") },
+	stdio: ["ignore", "pipe", "inherit"],
+});
+let trustingOutput = "";
+trusting.stdout.on("data", (chunk) => {
+	trustingOutput += chunk;
+});
+const trustingTimeout = setTimeout(() => trusting.kill("SIGKILL"), CLI_TIMEOUT_MS);
+await new Promise((resolve) => trusting.once("close", resolve));
+clearTimeout(trustingTimeout);
+await stopServer();
+// The case prints whether the connection failed over its certificate.
+if (trustingOutput.trim() === "false") passed++;
+else {
+	failures.push("NODE_EXTRA_CA_CERTS is trusted");
+	console.error(`FAIL NODE_EXTRA_CA_CERTS: printed ${trustingOutput}`);
 }
 
 console.log(`${passed} passed, ${failures.length} failed on Node.js ${process.version}`);

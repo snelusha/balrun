@@ -4,6 +4,8 @@ export interface TxtarFile {
 }
 
 const MARKER = /^-- (.+?) --[ \t]*$/;
+/** A body line that reads as a marker is stored with a leading backslash. */
+const ESCAPED_MARKER = /^\\+-- .+? --[ \t]*$/;
 
 export function parseTxtar(text: string): TxtarFile[] {
 	const files: TxtarFile[] = [];
@@ -18,7 +20,8 @@ export function parseTxtar(text: string): TxtarFile[] {
 			finish();
 			current = { name: marker[1], lines: [] };
 		} else {
-			current?.lines.push(line);
+			const bare = line.replace(/\r?\n$/, "");
+			current?.lines.push(ESCAPED_MARKER.test(bare) ? line.slice(1) : line);
 		}
 	}
 	finish();
@@ -28,7 +31,14 @@ export function parseTxtar(text: string): TxtarFile[] {
 export function formatTxtar(files: TxtarFile[]): string {
 	return files
 		.map(({ name, data }) => {
-			const body = data === "" || data.endsWith("\n") ? data : `${data}\n`;
+			const escaped = data
+				.split("\n")
+				.map((line) => {
+					const bare = line.replace(/\r$/, "");
+					return MARKER.test(bare) || ESCAPED_MARKER.test(bare) ? `\\${line}` : line;
+				})
+				.join("\n");
+			const body = escaped === "" || escaped.endsWith("\n") ? escaped : `${escaped}\n`;
 			return `-- ${name} --\n${body}`;
 		})
 		.join("");

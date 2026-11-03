@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 import { createNetPlatform } from "../src/net";
 import { WasmBridge } from "../src/wasm-bridge";
-import { caseSourcePath, runCase, discoverCases } from "./harness/corpus";
+import { caseSourcePath, certPath, runCase, discoverCases } from "./harness/corpus";
 import { drivers } from "./harness/drivers";
 import { MemFS } from "./memfs";
 
@@ -129,6 +129,9 @@ describe("NodeNetPlatform", () => {
 });
 
 describe("host CA bundle", () => {
+	// These load a fresh WASM instance, which can take seconds on a busy machine.
+	const LOAD_TIMEOUT_MS = 30_000;
+	const CLI_PATH = new URL("../bin/cli.mjs", import.meta.url).pathname;
 	const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
 	const prototype = Object.getPrototypeOf(createNetPlatform()) as NetPlatform;
 
@@ -138,47 +141,74 @@ describe("host CA bundle", () => {
 		return testCase;
 	}
 
-	it("isn't needed for a custom CA", async () => {
-		const roots = spyOn(prototype, "rootCertificates");
-		try {
-			const name = "hosted/ldap/tls-custom-ca-v";
-			await runCase(await WasmBridge.load(WASM_PATH), corpusCase(name), drivers[name]);
-			expect(roots).not.toHaveBeenCalled();
-		} finally {
-			roots.mockRestore();
-		}
-	});
+	it(
+		"isn't needed for a custom CA",
+		async () => {
+			const roots = spyOn(prototype, "rootCertificates");
+			try {
+				const name = "hosted/ldap/tls-custom-ca-v";
+				await runCase(await WasmBridge.load(WASM_PATH), corpusCase(name), drivers[name]);
+				expect(roots).not.toHaveBeenCalled();
+			} finally {
+				roots.mockRestore();
+			}
+		},
+		LOAD_TIMEOUT_MS,
+	);
 
-	it("is retried after a failed load", async () => {
-		const name = "hosted/ldap/tls-unknown-ca-v";
-		const bridge = await WasmBridge.load(WASM_PATH);
-		const entry = "tls-unknown-ca-v.bal";
-		const source = readFileSync(caseSourcePath(name), "utf8");
-		const firstRun = async () => {
-			let stdout = "";
-			await bridge.run(new MemFS({ [entry]: source }), entry, {
-				colors: false,
-				stdout: {
-					write: (chunk) => {
-						stdout += chunk;
+	it(
+		"includes certificates from NODE_EXTRA_CA_CERTS",
+		async () => {
+			const name = "hosted/ldap/tls-unknown-ca-v";
+			const cleanup = await drivers[name]?.setup?.();
+			try {
+				const cli = Bun.spawn([process.execPath, CLI_PATH, caseSourcePath(name)], {
+					env: { ...process.env, NODE_EXTRA_CA_CERTS: certPath("server-cert.pem") },
+				});
+				// The case prints whether the connection failed over its certificate.
+				expect((await new Response(cli.stdout).text()).trim()).toBe("false");
+				expect(await cli.exited).toBe(0);
+			} finally {
+				await cleanup?.();
+			}
+		},
+		LOAD_TIMEOUT_MS,
+	);
+
+	it(
+		"is retried after a failed load",
+		async () => {
+			const name = "hosted/ldap/tls-unknown-ca-v";
+			const bridge = await WasmBridge.load(WASM_PATH);
+			const entry = "tls-unknown-ca-v.bal";
+			const source = readFileSync(caseSourcePath(name), "utf8");
+			const firstRun = async () => {
+				let stdout = "";
+				await bridge.run(new MemFS({ [entry]: source }), entry, {
+					colors: false,
+					stdout: {
+						write: (chunk) => {
+							stdout += chunk;
+						},
 					},
-				},
-			});
-			return stdout.trim();
-		};
+				});
+				return stdout.trim();
+			};
 
-		const cleanup = await drivers[name]?.setup?.();
-		const roots = spyOn(prototype, "rootCertificates").mockRejectedValueOnce(
-			new Error("no bundle"),
-		);
-		try {
-			// The case prints whether the failure was about the certificate.
-			expect(await firstRun()).toBe("false");
-			expect(await firstRun()).toBe("true");
-			expect(roots).toHaveBeenCalledTimes(2);
-		} finally {
-			roots.mockRestore();
-			await cleanup?.();
-		}
-	});
+			const cleanup = await drivers[name]?.setup?.();
+			const roots = spyOn(prototype, "rootCertificates").mockRejectedValueOnce(
+				new Error("no bundle"),
+			);
+			try {
+				// The case prints whether the failure was about the certificate.
+				expect(await firstRun()).toBe("false");
+				expect(await firstRun()).toBe("true");
+				expect(roots).toHaveBeenCalledTimes(2);
+			} finally {
+				roots.mockRestore();
+				await cleanup?.();
+			}
+		},
+		LOAD_TIMEOUT_MS,
+	);
 });

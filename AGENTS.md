@@ -34,12 +34,12 @@ Useful root scripts:
 
 ## Tests
 
-Ballerina programs are tested through the corpus in `packages/balrun/tests/corpus`, not as sources inside TypeScript. Tests run with `bun run test`, and with `bun run test:node` under Node.js.
+Ballerina programs are tested through the corpus in `packages/balrun/tests/corpus`, not as sources inside TypeScript. Tests run with `bun run test`, with `bun run test:node` under Node.js, and with `bun run test:browser` in Chromium (run `bunx playwright install chromium-headless-shell` once).
 
 - `bal/<path>-{v,e,p}.bal` is a case; a directory with the same suffix is a project. `-v` runs cleanly, `-e` fails to compile, `-p` panics.
 - `integration/<path>.txtar` is its golden, with `stdout`, `stderr`, and `exitcode` sections. Generate goldens with `bun run --filter @snelusha/balrun test:update` and review the diff.
 - Mark each printed line with `// @output <text>`. Markers are checked in update mode too.
-- Add `// @requires ipv6` when a case needs it. Cases under `bal/browser/` run without host sockets.
+- Add `// @requires ipv6` when a case needs it. Cases under `bal/browser/` run without host sockets, and those plus `core/` and `project/` also run in Chromium.
 - Cases under `bal/hosted/` need something outside Ballerina, such as a server or an external peer, and each needs a driver in `tests/harness/drivers.ts`.
 - Corpus programs use fixed ports from `19600` to `19999`, and each port belongs to one case.
 

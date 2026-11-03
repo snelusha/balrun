@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"syscall/js"
 	"time"
 )
@@ -20,19 +21,43 @@ const closedSocketCode = "ECLOSED"
 
 var errWriteAbandoned = errors.New("stream is unusable for writing after a write timed out")
 
-var hostErrorText = map[string]string{
-	"EACCES":        "permission denied",
-	"EADDRINUSE":    "address already in use",
-	"EADDRNOTAVAIL": "cannot assign requested address",
-	"EAFNOSUPPORT":  "address family not supported by protocol",
-	"ECONNREFUSED":  "connection refused",
-	"ECONNRESET":    "connection reset by peer",
-	"EHOSTUNREACH":  "no route to host",
-	"EMSGSIZE":      "message too long",
-	"ENETUNREACH":   "network is unreachable",
-	"ENOTFOUND":     "no such host",
-	"EPIPE":         "broken pipe",
-	"ETIMEDOUT":     "connection timed out",
+var hostErrnos = map[string]hostErrno{
+	"EACCES":        {syscall.EACCES, "permission denied"},
+	"EADDRINUSE":    {syscall.EADDRINUSE, "address already in use"},
+	"EADDRNOTAVAIL": {syscall.EADDRNOTAVAIL, "cannot assign requested address"},
+	"EAFNOSUPPORT":  {syscall.EAFNOSUPPORT, "address family not supported by protocol"},
+	"ECONNREFUSED":  {syscall.ECONNREFUSED, "connection refused"},
+	"ECONNRESET":    {syscall.ECONNRESET, "connection reset by peer"},
+	"EHOSTUNREACH":  {syscall.EHOSTUNREACH, "no route to host"},
+	"EMSGSIZE":      {syscall.EMSGSIZE, "message too long"},
+	"ENETUNREACH":   {syscall.ENETUNREACH, "network is unreachable"},
+	"EPIPE":         {syscall.EPIPE, "broken pipe"},
+	"ETIMEDOUT":     {syscall.ETIMEDOUT, "connection timed out"},
+}
+
+// hostErrno keeps the errno's identity for errors.Is and Timeout, with the text
+// Linux reports, since js/wasm's own table words some of these differently.
+type hostErrno struct {
+	errno syscall.Errno
+	text  string
+}
+
+func (e hostErrno) Error() string { return e.text }
+func (e hostErrno) Unwrap() error { return e.errno }
+func (e hostErrno) Timeout() bool { return e.errno.Timeout() }
+
+// addressedError prefixes an address the way native net errors show it, without
+// hiding Timeout, which net.OpError only looks for on the error it holds.
+type addressedError struct {
+	address string
+	err     error
+}
+
+func (e *addressedError) Error() string { return e.address + ": " + e.err.Error() }
+func (e *addressedError) Unwrap() error { return e.err }
+func (e *addressedError) Timeout() bool {
+	var timeout interface{ Timeout() bool }
+	return errors.As(e.err, &timeout) && timeout.Timeout()
 }
 
 func hostErrorCode(err error) string {
@@ -45,8 +70,12 @@ func hostErrorCode(err error) string {
 }
 
 func hostNetError(err error) error {
-	if text, ok := hostErrorText[hostErrorCode(err)]; ok {
-		return errors.New(text)
+	code := hostErrorCode(err)
+	if errno, ok := hostErrnos[code]; ok {
+		return errno
+	}
+	if code == "ENOTFOUND" {
+		return errors.New("no such host")
 	}
 	return hostError(err)
 }
@@ -138,11 +167,16 @@ func (d hostDriver) listen(network, address string) (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
+	if host != "" {
+		if host, err = d.resolveIP(context.Background(), host, family); err != nil {
+			return nil, &net.OpError{Op: "listen", Net: network, Err: err}
+		}
+	}
 	options := map[string]any{"host": host, "port": port}
 	setFamily(options, family)
 	listener, err := awaitPromise(d.proxy.Call("listen", js.ValueOf(options)))
 	if err != nil {
-		return nil, &net.OpError{Op: "listen", Net: network, Err: fmt.Errorf("%s: %w", address, hostNetError(err))}
+		return nil, &net.OpError{Op: "listen", Net: network, Err: &addressedError{address, hostNetError(err)}}
 	}
 	return &hostListener{
 		network:  network,
@@ -207,7 +241,7 @@ func (d hostDriver) listenPacket(network, address string) (net.PacketConn, error
 	setFamily(options, family)
 	socket, err := awaitPromise(d.proxy.Call("bindDatagram", js.ValueOf(options)))
 	if err != nil {
-		return nil, &net.OpError{Op: "listen", Net: network, Err: fmt.Errorf("%s: %w", address, hostNetError(err))}
+		return nil, &net.OpError{Op: "listen", Net: network, Err: &addressedError{address, hostNetError(err)}}
 	}
 	return &packetConn{datagramSocket: newDatagramSocket(network, socket)}, nil
 }
@@ -233,6 +267,10 @@ func (d hostDriver) resolvePacketAddr(network, address string) (net.Addr, error)
 
 func (d hostDriver) resolveIP(ctx context.Context, host string, family int) (string, error) {
 	if unzoned, _, _ := strings.Cut(host, "%"); net.ParseIP(unzoned) != nil {
+		isIPv4 := net.ParseIP(unzoned).To4() != nil
+		if (family == 4 && !isIPv4) || (family == 6 && isIPv4) {
+			return "", &net.AddrError{Err: "no suitable address found", Addr: host}
+		}
 		return host, nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -320,7 +358,7 @@ func dialHost(host string) string {
 }
 
 func dialError(network, address string, err error) error {
-	return &net.OpError{Op: "dial", Net: network, Err: fmt.Errorf("%s: %w", address, err)}
+	return &net.OpError{Op: "dial", Net: network, Err: &addressedError{address, err}}
 }
 
 func abortSignal(ctx context.Context) (js.Value, func()) {

@@ -1,3 +1,5 @@
+import { isNodeRuntime } from "./runtime";
+
 export type Environment = Map<string, string>;
 
 const NODE_OS_MODULE = "node:os";
@@ -25,7 +27,7 @@ export interface ProcessPlatform {
 }
 
 export function createOSPlatform(environment?: Environment): OSPlatform {
-	return supportsNodeOS() ? new NodeOSPlatform() : new BrowserOSPlatform(environment);
+	return isNodeRuntime() ? new NodeOSPlatform() : new BrowserOSPlatform(environment);
 }
 
 class BrowserOSPlatform implements OSPlatform {
@@ -173,10 +175,6 @@ function concat(chunks: Uint8Array[]): Uint8Array {
 		offset += chunk.length;
 	}
 	return result;
-}
-
-function supportsNodeOS(): boolean {
-	return typeof process !== "undefined" && !!process.versions?.node;
 }
 
 function unsupportedOS(): never {

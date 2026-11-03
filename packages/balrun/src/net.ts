@@ -1,3 +1,5 @@
+import { isNodeRuntime } from "./runtime";
+
 const NODE_NET_MODULE = "node:net";
 const NODE_DGRAM_MODULE = "node:dgram";
 const NODE_DNS_MODULE = "node:dns/promises";
@@ -65,7 +67,7 @@ export interface NetPlatform {
 }
 
 export function createNetPlatform(): NetPlatform | undefined {
-	return supportsNodeNet() ? new NodeNetPlatform() : undefined;
+	return isNodeRuntime() ? new NodeNetPlatform() : undefined;
 }
 
 class NodeNetPlatform implements NetPlatform {
@@ -154,10 +156,13 @@ class NodeNetPlatform implements NetPlatform {
 	}
 
 	async rootCertificates(): Promise<string[]> {
-		const { rootCertificates } = (await import(
+		const { getCACertificates, rootCertificates } = (await import(
 			/* @vite-ignore */ NODE_TLS_MODULE
 		)) as typeof import("node:tls");
-		return [...rootCertificates];
+		// Unlike rootCertificates, this includes NODE_EXTRA_CA_CERTS. Added in Node.js 22.15.
+		return typeof getCACertificates === "function"
+			? getCACertificates("default")
+			: [...rootCertificates];
 	}
 }
 
@@ -411,8 +416,4 @@ function addressOf(host: string | undefined, port: number | undefined): NetAddre
 
 function closedSocketError(): Error {
 	return Object.assign(new Error("use of closed network connection"), { code: CLOSED_SOCKET_CODE });
-}
-
-function supportsNodeNet(): boolean {
-	return typeof process !== "undefined" && !!process.versions?.node;
 }
