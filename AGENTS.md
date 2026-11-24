@@ -27,6 +27,14 @@ Useful root scripts:
 - `bun run lint` / `bun run lint:fix` — Oxlint (and safe auto-fixes)
 - `bun run format` / `bun run format:check` — Oxfmt (write / verify formatting)
 
+## Areas
+
+`.agents/` has one file per area. Read the one for the area you change:
+
+| File                                   | Covers                                                                |
+| -------------------------------------- | --------------------------------------------------------------------- |
+| [.agents/balrun.md](.agents/balrun.md) | `packages/balrun`: the core/node/web split, entry rules, build, tests |
+
 ## Conventions
 
 - Oxlint and Oxfmt are the primary linter and formatter; keep tab indentation and double quotes.

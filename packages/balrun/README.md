@@ -34,6 +34,8 @@ const exitCode = await ballerina.run("./main.bal", { colors: true });
 
 Options passed to `run()` override the constructor defaults for that call only.
 
+Importing `@snelusha/balrun` picks the Node.js or browser entry automatically, and `@snelusha/balrun/node` or `@snelusha/balrun/web` selects one explicitly. `ballerina.wasm` ships in the package (`@snelusha/balrun/ballerina.wasm`) and loads from next to the entry.
+
 ### Version information
 
 `BALRUN_VERSION` is the npm package version. `Ballerina#version()` also reports the version and Git revision embedded in the loaded interpreter WASM, which can differ when using `wasmSource` or `core`.
@@ -61,13 +63,14 @@ The CLI forwards `SIGINT` and `SIGTERM` as graceful stops, and `SIGQUIT` as an i
 ## React
 
 ```tsx
+import { Ballerina } from "@snelusha/balrun";
 import { BallerinaProvider, useBallerina } from "@snelusha/balrun/react";
 
-const fs = new SomeFS();
+const ballerina = new Ballerina({ fs: new SomeFS() });
 
 function App() {
   return (
-    <BallerinaProvider fs={fs}>
+    <BallerinaProvider ballerina={ballerina}>
       <RunButton />
     </BallerinaProvider>
   );
@@ -84,7 +87,9 @@ function RunButton() {
 }
 ```
 
-`BallerinaProvider` accepts the same options as `Ballerina` and initializes one shared runtime for its descendants. `useBallerina()` must be called within a provider. In browser environments, provide an `fs` implementation.
+`BallerinaProvider` initializes the given `Ballerina` and shares it with its descendants. `useBallerina()` returns `{ ballerina, isReady, error, run }` and must be called within a provider.
+
+Create the `Ballerina` instance once, at module scope or with a `useState` initializer. A new instance on every render starts a new runtime each time.
 
 See [`examples/vite`](https://github.com/snelusha/balrun/tree/main/examples/vite) for a Vite + React browser example.
 
@@ -137,8 +142,7 @@ await new Ballerina({ fs: new MemFS() }).run("main.bal");
 To use the Node adapter explicitly:
 
 ```ts
-import { Ballerina } from "@snelusha/balrun";
-import { NodeFS } from "@snelusha/balrun/fs/node";
+import { Ballerina, NodeFS } from "@snelusha/balrun/node";
 
 await new Ballerina({ fs: new NodeFS() }).run("./main.bal");
 ```
@@ -150,8 +154,7 @@ See [`examples/memfs`](https://github.com/snelusha/balrun/tree/main/examples/mem
 In browsers, Ballerina's environment-variable operations use a copy of the supplied map for each run. User and home-directory lookups and subprocess execution are unavailable in browsers and panic when called. Node.js and Bun use the host environment and support all OS operations, including `os:exec`.
 
 ```ts
-import { Ballerina } from "@snelusha/balrun";
-import { NodeFS } from "@snelusha/balrun/fs/node";
+import { Ballerina, NodeFS } from "@snelusha/balrun/node";
 
 const env = new Map([["GREETING", "hello"]]);
 await new Ballerina({ fs: new NodeFS(), env }).run("main.bal");
@@ -201,7 +204,7 @@ await new Ballerina({ core }).run("main.bal");
 
 `ballerina.wasm` must be available in the final build output at runtime.
 
-Vite handles this automatically: it detects the default WASM URL and emits `ballerina.wasm` into `dist/assets` during `vite build`. Other bundlers may not copy the file automatically. If your built app cannot find `ballerina.wasm`, copy it from `node_modules/@snelusha/balrun/dist/ballerina.wasm` into your app's output directory, or use `wasmSource` to point to where you serve it.
+Vite handles this automatically: it detects the default WASM URL and emits `ballerina.wasm` into `dist/assets` during `vite build`. Other bundlers may not copy the file automatically. If your built app cannot find `ballerina.wasm`, copy it from `node_modules/@snelusha/balrun/dist/ballerina.wasm` (exported as `@snelusha/balrun/ballerina.wasm`) into your app's output directory, or use `wasmSource` to point to where you serve it.
 
 ## Acknowledgements
 
