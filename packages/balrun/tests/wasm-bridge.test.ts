@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { fileURLToPath } from "node:url";
 
-import { WasmBridge } from "../src/wasm-bridge";
+import { WasmBridge } from "../src/node";
 import { MemFS } from "./memfs";
 
-import type { WasmExports } from "../src/wasm-bridge";
+import type { WasmExports } from "../src/core/bridge";
 
 const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
 

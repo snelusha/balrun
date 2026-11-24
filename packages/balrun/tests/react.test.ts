@@ -5,9 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 
+import { Ballerina, WasmBridge } from "../src/node";
 import { BallerinaProvider, useBallerina } from "../src/react";
-
-import { WasmBridge } from "../src/wasm-bridge";
 import { MemFS } from "./memfs";
 
 import type { BallerinaProviderProps } from "../src/react";
@@ -49,10 +48,12 @@ describe("React", () => {
 		});
 		const stdout: string[] = [];
 		const { container, root, runtime } = await renderProvider({
-			core: await WasmBridge.load(WASM_PATH),
-			fs,
-			colors: false,
-			stdout: { write: (chunk) => stdout.push(chunk) },
+			ballerina: new Ballerina({
+				core: await WasmBridge.load(WASM_PATH),
+				fs,
+				colors: false,
+				stdout: { write: (chunk) => stdout.push(chunk) },
+			}),
 		});
 
 		expect(container.innerHTML).toBe("<output>true:null</output>");
@@ -65,12 +66,40 @@ describe("React", () => {
 
 	test("BallerinaProvider rejects invalid run paths", async () => {
 		const { root, runtime } = await renderProvider({
-			core: await WasmBridge.load(WASM_PATH),
-			fs: new MemFS({}),
+			ballerina: new Ballerina({ core: await WasmBridge.load(WASM_PATH), fs: new MemFS({}) }),
 		});
 
 		expect(runtime.current).not.toBeNull();
 		expect(runtime.current!.run("")).rejects.toThrow("[balrun]: run path must not be empty.");
+
+		await act(async () => root.unmount());
+	});
+
+	test("BallerinaProvider shares the given instance", async () => {
+		const ballerina = new Ballerina({ core: await WasmBridge.load(WASM_PATH), fs: new MemFS({}) });
+		const { root, runtime } = await renderProvider({ ballerina });
+
+		expect(runtime.current?.ballerina).toBe(ballerina);
+		expect(runtime.current?.isReady).toBe(true);
+
+		await act(async () => root.unmount());
+	});
+
+	test("BallerinaProvider reports initialization errors", async () => {
+		const { container, root, runtime } = await renderProvider({
+			ballerina: new Ballerina({ fs: new MemFS({}), wasmSource: "/tmp/balrun-missing.wasm" }),
+		});
+
+		while (!runtime.current?.error) await act(() => Bun.sleep(10));
+
+		expect(runtime.current?.isReady).toBe(false);
+		expect(runtime.current?.error?.message).toStartWith(
+			"[balrun]: failed to initialize the WASM bridge:",
+		);
+		expect(runtime.current!.run("main.bal")).rejects.toThrow(
+			"[balrun]: runtime instance is not initialized.",
+		);
+		expect(container.innerHTML).toStartWith("<output>false:Error:");
 
 		await act(async () => root.unmount());
 	});

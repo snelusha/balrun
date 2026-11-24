@@ -1,24 +1,24 @@
+import { createHTTPListenerTransport } from "./http-listener";
+
 import type {
 	BallerinaCore,
-	BallerinaRunOptions,
 	BallerinaInterpreterVersion,
+	BallerinaRunOptions,
 	BallerinaRunResult,
 	BallerinaStopMode,
 } from "./ballerina-core";
-import { createHTTPListenerTransport } from "./http-listener";
-import { createOSPlatform } from "./os";
-
+import type { FS } from "./fs";
 import type {
 	HTTPDispatchRequest,
-	HTTPListenerTransport,
 	HTTPListenerReady,
 	HTTPListenerRequest,
 	HTTPListenerResponse,
+	HTTPListenerTransport,
 } from "./http-listener";
 import type { OSPlatform } from "./os";
-import type { FS } from "./fs/core";
+import type { Platform } from "./platform";
 
-const NODE_FS_PROMISES_MODULE = "node:fs/promises";
+export type WasmSource = string | URL | Response | PromiseLike<Response>;
 
 interface WasmPlatform {
 	httpListenerTransport: HTTPListenerTransport;
@@ -51,24 +51,28 @@ export class WasmBridge implements BallerinaCore {
 	private onListenerReady: ((listener: HTTPListenerReady) => void) | undefined;
 	private activeRun = false;
 
-	private platform: Omit<WasmPlatform, "os"> = {
-		httpListenerTransport: createHTTPListenerTransport(
+	private readonly platform: Platform;
+	private readonly httpListenerTransport: HTTPListenerTransport;
+
+	constructor(platform: Platform) {
+		this.platform = platform;
+		this.httpListenerTransport = createHTTPListenerTransport(
 			(listener, request) =>
 				this.exports.dispatchHttpRequest(listener.host, listener.port, request),
 			(listener) => this.onListenerReady?.(listener),
-		),
-	};
+			platform.httpServer,
+		);
+	}
 
-	static async load(source: string | Response | PromiseLike<Response>): Promise<WasmBridge> {
+	async start(source: WasmSource = this.platform.wasm): Promise<this> {
 		await import("./wasm_exec");
 		const go = new Go();
-		const instance = await loadWasm(source, go.importObject);
+		const instance = await instantiate(this.platform, source, go.importObject);
 		go.run(instance);
-		const bridge = new WasmBridge();
-		bridge.go = go;
+		this.go = go;
 		// FIXME: `stop()` conflicts with DOM `window.stop()`
-		bridge.exports = { ...globalThis } as unknown as WasmExports;
-		return bridge;
+		this.exports = { ...globalThis } as unknown as WasmExports;
+		return this;
 	}
 
 	async version(): Promise<BallerinaInterpreterVersion> {
@@ -86,7 +90,10 @@ export class WasmBridge implements BallerinaCore {
 		try {
 			return await this.exports.run(proxy, path, {
 				...runOptions,
-				platform: { ...this.platform, os: createOSPlatform(runOptions.env) },
+				platform: {
+					httpListenerTransport: this.httpListenerTransport,
+					os: this.platform.createOS(runOptions.env),
+				},
 			});
 		} finally {
 			this.activeRun = false;
@@ -100,7 +107,7 @@ export class WasmBridge implements BallerinaCore {
 	}
 
 	dispatchHttpRequest(request: HTTPDispatchRequest): Promise<HTTPListenerResponse> {
-		return this.platform.httpListenerTransport.dispatch(request);
+		return this.httpListenerTransport.dispatch(request);
 	}
 
 	private clearScheduledTimeouts(): void {
@@ -115,38 +122,27 @@ export class WasmBridge implements BallerinaCore {
 	}
 }
 
-function loadWasm(
-	source: string | Response | PromiseLike<Response>,
+async function instantiate(
+	platform: Platform,
+	source: WasmSource,
 	importObject: WebAssembly.Imports,
 ): Promise<WebAssembly.Instance> {
-	if (typeof source === "string") {
-		if (source === "") return Promise.reject(new Error("[balrun]: WASM source must not be empty."));
-		if (shouldFetch(source)) return loadRemote(source, importObject);
-		else return loadLocal(source, importObject);
-	} else {
-		return loadFromResponse(source, importObject);
+	if (typeof source === "string" || source instanceof URL) {
+		if (source === "") throw new Error("[balrun]: WASM source must not be empty.");
+		const bytes = platform.readWasm?.(source);
+		if (bytes) {
+			const { instance } = await WebAssembly.instantiate(
+				(await bytes) as Uint8Array<ArrayBuffer>,
+				importObject,
+			);
+			return instance;
+		}
+		return instantiateResponse(fetch(source), importObject);
 	}
+	return instantiateResponse(source, importObject);
 }
 
-async function loadRemote(
-	url: string,
-	importObject: WebAssembly.Imports,
-): Promise<WebAssembly.Instance> {
-	const response = await fetch(url);
-	return loadFromResponse(response, importObject);
-}
-
-async function loadLocal(
-	path: string,
-	importObject: WebAssembly.Imports,
-): Promise<WebAssembly.Instance> {
-	const fs = await import(/* @vite-ignore */ NODE_FS_PROMISES_MODULE);
-	const buffer = await fs.readFile(toLocalPath(path));
-	const { instance } = await WebAssembly.instantiate(buffer, importObject);
-	return instance;
-}
-
-async function loadFromResponse(
+async function instantiateResponse(
 	source: Response | PromiseLike<Response>,
 	importObject: WebAssembly.Imports,
 ): Promise<WebAssembly.Instance> {
@@ -162,28 +158,5 @@ async function loadFromResponse(
 		const buffer = await response.arrayBuffer();
 		const { instance } = await WebAssembly.instantiate(buffer, importObject);
 		return instance;
-	}
-}
-
-function shouldFetch(source: string): boolean {
-	const isNodeRuntime =
-		typeof process !== "undefined" && typeof process.versions?.node === "string";
-
-	// In a browser environment, we can assume all string sources are URLs.
-	if (!isNodeRuntime && typeof window !== "undefined") return true;
-	try {
-		const url = new URL(source);
-		return url.protocol === "http:" || url.protocol === "https:";
-	} catch {
-		return false;
-	}
-}
-
-function toLocalPath(path: string): string | URL {
-	try {
-		const url = new URL(path);
-		return url.protocol === "file:" ? url : path;
-	} catch {
-		return path;
 	}
 }

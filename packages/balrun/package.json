@@ -33,28 +33,42 @@
 		"dist"
 	],
 	"type": "module",
-	"main": "./dist/index.mjs",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.mts",
+	"sideEffects": [
+		"./dist/wasm_exec-*.mjs"
+	],
+	"types": "./dist/node.d.mts",
 	"exports": {
 		".": {
-			"types": "./dist/index.d.mts",
-			"import": "./dist/index.mjs",
-			"default": "./dist/index.mjs"
+			"node": {
+				"types": "./dist/node.d.mts",
+				"default": "./dist/node.mjs"
+			},
+			"default": {
+				"types": "./dist/web.d.mts",
+				"default": "./dist/web.mjs"
+			}
 		},
-		"./fs/node": {
-			"types": "./dist/fs/node.d.mts",
-			"import": "./dist/fs/node.mjs",
-			"default": "./dist/fs/node.mjs"
+		"./node": {
+			"types": "./dist/node.d.mts",
+			"default": "./dist/node.mjs"
+		},
+		"./web": {
+			"types": "./dist/web.d.mts",
+			"default": "./dist/web.mjs"
 		},
 		"./react": {
 			"types": "./dist/react.d.mts",
-			"import": "./dist/react.mjs",
 			"default": "./dist/react.mjs"
-		}
+		},
+		"./fs/node": {
+			"types": "./dist/node.d.mts",
+			"default": "./dist/node.mjs"
+		},
+		"./ballerina.wasm": "./dist/ballerina.wasm",
+		"./package.json": "./package.json"
 	},
 	"scripts": {
-		"build": "tsdown && cp ../ballerina-wasm/dist/ballerina.wasm dist/ballerina.wasm",
+		"build": "tsdown",
 		"test": "bun test --isolate",
 		"typecheck": "bun check",
 		"clean": "git clean -xdf .turbo dist"

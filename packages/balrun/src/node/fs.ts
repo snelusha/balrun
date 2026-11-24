@@ -1,6 +1,6 @@
-import type { DirEntry, FS, OpenResult, StatResult } from "./core";
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 
-const NODE_FS_PROMISES_MODULE = "node:fs/promises";
+import type { DirEntry, FS, OpenResult, StatResult } from "../core/fs";
 
 /**
  * Node.js filesystem implementation for the Ballerina runtime.
@@ -10,8 +10,7 @@ export class NodeFS implements FS {
 
 	async open(path: string): Promise<OpenResult | null> {
 		try {
-			const fs = await nodeFs();
-			const stats = await fs.stat(path);
+			const stats = await stat(path);
 			if (stats.isDirectory()) {
 				return {
 					content: "",
@@ -20,7 +19,7 @@ export class NodeFS implements FS {
 					isDir: true,
 				};
 			}
-			const content = await fs.readFile(path, "utf-8");
+			const content = await readFile(path, "utf-8");
 			return {
 				content,
 				size: stats.size,
@@ -33,8 +32,7 @@ export class NodeFS implements FS {
 	}
 	async stat(path: string): Promise<StatResult | null> {
 		try {
-			const fs = await nodeFs();
-			const stats = await fs.stat(path);
+			const stats = await stat(path);
 			return {
 				name: basename(path),
 				size: stats.size,
@@ -47,8 +45,7 @@ export class NodeFS implements FS {
 	}
 	async readDir(path: string): Promise<DirEntry[] | null> {
 		try {
-			const fs = await nodeFs();
-			const entries = await fs.readdir(path, { withFileTypes: true });
+			const entries = await readdir(path, { withFileTypes: true });
 			return entries.map((entry) => ({
 				name: entry.name,
 				isDir: entry.isDirectory(),
@@ -59,8 +56,7 @@ export class NodeFS implements FS {
 	}
 	async writeFile(path: string, content: string): Promise<boolean> {
 		try {
-			const fs = await nodeFs();
-			await fs.writeFile(path, content, "utf-8");
+			await writeFile(path, content, "utf-8");
 			return true;
 		} catch {
 			return false;
@@ -68,8 +64,7 @@ export class NodeFS implements FS {
 	}
 	async remove(path: string): Promise<boolean> {
 		try {
-			const fs = await nodeFs();
-			await fs.rm(path, { recursive: true, force: true });
+			await rm(path, { recursive: true, force: true });
 			return true;
 		} catch {
 			return false;
@@ -77,8 +72,7 @@ export class NodeFS implements FS {
 	}
 	async move(oldPath: string, newPath: string): Promise<boolean> {
 		try {
-			const fs = await nodeFs();
-			await fs.rename(oldPath, newPath);
+			await rename(oldPath, newPath);
 			return true;
 		} catch {
 			return false;
@@ -86,8 +80,7 @@ export class NodeFS implements FS {
 	}
 	async mkdirAll(path: string): Promise<boolean> {
 		try {
-			const fs = await nodeFs();
-			await fs.mkdir(path, { recursive: true });
+			await mkdir(path, { recursive: true });
 			return true;
 		} catch {
 			return false;
@@ -99,11 +92,4 @@ function basename(path: string): string {
 	const normalized = path.replace(/[/\\]+$/, "");
 	const index = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
 	return index === -1 ? normalized : normalized.slice(index + 1);
-}
-
-let nodeFsPromise: Promise<typeof import("node:fs/promises")> | undefined;
-
-async function nodeFs(): Promise<typeof import("node:fs/promises")> {
-	nodeFsPromise ??= import(/* @vite-ignore */ NODE_FS_PROMISES_MODULE);
-	return nodeFsPromise;
 }

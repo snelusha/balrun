@@ -1,17 +1,17 @@
 import { describe, expect, it } from "bun:test";
 
-import { Ballerina } from "../src/ballerina.ts";
-import { BALRUN_VERSION } from "../src/version.ts";
+import { BALRUN_VERSION, Ballerina } from "../src/node";
 import { MemFS } from "./memfs";
 
 import type {
 	BallerinaCore,
+	BallerinaOptions,
 	BallerinaRunOptions,
 	BallerinaStopMode,
-} from "../src/ballerina-core.ts";
-import type { BallerinaOptions } from "../src/ballerina.ts";
-import type { FS } from "../src/fs/core.ts";
-import type { HTTPDispatchRequest, HTTPListenerResponse } from "../src/http-listener.ts";
+	FS,
+	HTTPDispatchRequest,
+	HTTPListenerResponse,
+} from "../src/node";
 
 class SpyCore implements BallerinaCore {
 	calls: Array<{ fs: FS; path: string; options?: BallerinaRunOptions }> = [];

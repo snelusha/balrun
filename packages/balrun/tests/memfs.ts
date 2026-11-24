@@ -1,4 +1,4 @@
-import type { DirEntry, FS, OpenResult, StatResult } from "../src/fs/core";
+import type { DirEntry, FS, OpenResult, StatResult } from "../src/core/fs";
 
 export class MemFS implements FS {
 	private directories = new Set(["."]);
