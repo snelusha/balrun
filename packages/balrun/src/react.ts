@@ -49,6 +49,7 @@ export function BallerinaProvider({ ballerina, children }: BallerinaProviderProp
 
 		return () => {
 			cancelled = true;
+			setFailure(null);
 		};
 	}, [ballerina]);
 

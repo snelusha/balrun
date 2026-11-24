@@ -2,13 +2,14 @@ import { createElement } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
 
 import { Ballerina, WasmBridge } from "../src/node";
 import { BallerinaProvider, useBallerina } from "../src/react";
 import { MemFS } from "./memfs";
 
+import type { BallerinaCore } from "../src/core/ballerina-core";
 import type { BallerinaProviderProps } from "../src/react";
 
 const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
@@ -33,11 +34,14 @@ async function renderProvider(options: Omit<BallerinaProviderProps, "children">)
 		return createElement("output", null, `${ballerina.isReady}:${ballerina.error}`);
 	}
 
-	await act(async () => {
-		root.render(createElement(BallerinaProvider, options, createElement(Consumer)));
-	});
+	const rerender = (options: Omit<BallerinaProviderProps, "children">) =>
+		act(async () => {
+			root.render(createElement(BallerinaProvider, options, createElement(Consumer)));
+		});
 
-	return { container, root, runtime };
+	await rerender(options);
+
+	return { container, rerender, root, runtime };
 }
 
 describe("React", () => {
@@ -100,6 +104,23 @@ describe("React", () => {
 			"[balrun]: runtime instance is not initialized.",
 		);
 		expect(container.innerHTML).toStartWith("<output>false:Error:");
+
+		await act(async () => root.unmount());
+	});
+
+	test("BallerinaProvider clears the error when a failed instance recovers", async () => {
+		const fs = new MemFS({});
+		const core = {} as BallerinaCore;
+		const failing = new Ballerina({ core, fs });
+		const init = spyOn(failing, "init").mockRejectedValueOnce(new Error("boom"));
+
+		const { container, rerender, root } = await renderProvider({ ballerina: failing });
+		expect(container.innerHTML).toBe("<output>false:Error: boom</output>");
+
+		await rerender({ ballerina: new Ballerina({ core, fs }) });
+		await rerender({ ballerina: failing });
+		expect(init).toHaveBeenCalledTimes(2);
+		expect(container.innerHTML).toBe("<output>true:null</output>");
 
 		await act(async () => root.unmount());
 	});
