@@ -1,24 +1,34 @@
-import { join } from "node:path";
-
 const packageDir = import.meta.dir + "/..";
-const interpreterDir = join(packageDir, "ballerina");
+const interpreterModule = "github.com/ballerina-nutcracker/ballerina/lib";
 
-function git(args: string[]): string {
-	const result = Bun.spawnSync(["git", "-C", interpreterDir, ...args], {
+function go(args: string[]): string {
+	const result = Bun.spawnSync(["go", ...args], {
+		cwd: packageDir,
 		stdout: "pipe",
 		stderr: "pipe",
 	});
 	if (result.exitCode !== 0) {
-		throw new Error(`failed to run git ${args.join(" ")} in ${interpreterDir}`);
+		throw new Error(`go ${args.join(" ")} failed:\n${new TextDecoder().decode(result.stderr)}`);
 	}
-
-	const value = new TextDecoder().decode(result.stdout).trim();
-	if (value === "") throw new Error(`git ${args.join(" ")} returned no output`);
-	return value;
+	return new TextDecoder().decode(result.stdout).trim();
 }
 
-const interpreterVersion = git(["describe", "--tags", "--abbrev=0"]);
-const interpreterRevision = git(["rev-parse", "HEAD"]);
+const interpreterVersion = go([
+	"list",
+	"-m",
+	"-f",
+	"{{with .Replace}}{{.Version}}{{else}}{{.Version}}{{end}}",
+	interpreterModule,
+]);
+if (interpreterVersion === "") throw new Error(`${interpreterModule} has no version in go.mod`);
+
+const download = JSON.parse(
+	go(["mod", "download", "-json", `${interpreterModule}@${interpreterVersion}`]),
+) as { Origin?: { Hash?: string } };
+const interpreterRevision = download.Origin?.Hash;
+if (!interpreterRevision)
+	throw new Error(`no commit hash for ${interpreterModule}@${interpreterVersion}`);
+
 const result = Bun.spawnSync(
 	[
 		"go",

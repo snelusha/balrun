@@ -28,10 +28,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
-          submodules: recursive
-
-      - name: Fetch Ballerina tags
-        run: git -C packages/ballerina-wasm/ballerina fetch --tags
 
       - name: Set up Go
         uses: actions/setup-go@v7
