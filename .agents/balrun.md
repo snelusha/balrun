@@ -10,6 +10,11 @@ README.md documents the public API. This file covers the rules and the parts tha
 - `src/react.ts` imports only from `src/core/`. `BallerinaProvider` takes a `Ballerina` instance and never chooses a platform.
 - Use erasable TypeScript syntax only (no enums, namespaces or parameter properties), and `import type` for types. There are no runtime dependencies.
 
+## WASM exports
+
+- Go sets its exports on an object owned by `WasmBridge`, never on `globalThis`. `src/core/bridge.ts` passes the object through `globalThis.__balrun_exports__` only while `go.run()` starts; `packages/ballerina-wasm/main_wasm.go` takes it. Change them together.
+- Go must register its exports before `main` first blocks, because the bridge removes the key as soon as `go.run()` returns.
+
 ## Filesystem
 
 - `src/core/fs.ts` is the contract; `packages/ballerina-wasm/bridge_fs_wasm.go` is its only caller. Change them together.
