@@ -44,6 +44,9 @@ type GoRuntime = Go & {
 	_scheduledTimeouts?: Map<number, ReturnType<typeof setTimeout>>;
 };
 
+// Keep in sync with packages/ballerina-wasm/main_wasm.go.
+const EXPORTS_KEY = "__balrun_exports__";
+
 export class WasmBridge implements BallerinaCore {
 	private exports: WasmExports = {} as WasmExports;
 	private go: GoRuntime | null = null;
@@ -68,10 +71,8 @@ export class WasmBridge implements BallerinaCore {
 		await import("./wasm_exec");
 		const go = new Go();
 		const instance = await instantiate(this.platform, source, go.importObject);
-		go.run(instance);
+		this.exports = await startGo(go, instance);
 		this.go = go;
-		// FIXME: `stop()` conflicts with DOM `window.stop()`
-		this.exports = { ...globalThis } as unknown as WasmExports;
 		return this;
 	}
 
@@ -120,6 +121,23 @@ export class WasmBridge implements BallerinaCore {
 		}
 		timeouts.clear();
 	}
+}
+
+async function startGo(go: Go, instance: WebAssembly.Instance): Promise<WasmExports> {
+	const host = globalThis as { [EXPORTS_KEY]?: Partial<WasmExports> };
+	const exports: Partial<WasmExports> = {};
+
+	let running: Promise<void>;
+	host[EXPORTS_KEY] = exports;
+	try {
+		running = go.run(instance);
+	} finally {
+		delete host[EXPORTS_KEY];
+	}
+
+	await Promise.race([running, Promise.resolve()]);
+	if (!exports.run) throw new Error("[balrun]: the WASM module did not register its exports.");
+	return exports as WasmExports;
 }
 
 async function instantiate(

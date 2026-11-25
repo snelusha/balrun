@@ -20,12 +20,19 @@ var (
 	interpreterRevision = "unknown"
 )
 
-func main() {
-	js.Global().Set("run", js.FuncOf(run))
-	js.Global().Set("stop", js.FuncOf(stop))
-	js.Global().Set("version", js.FuncOf(version))
+// Keep in sync with packages/balrun/src/core/bridge.ts.
+const exportsKey = "__balrun_exports__"
 
-	js.Global().Set("dispatchHttpRequest", js.FuncOf(dispatchHTTPRequest))
+func main() {
+	exports := js.Global().Get(exportsKey)
+	if exports.Type() != js.TypeObject {
+		panic("balrun: " + exportsKey + " is not set by the host")
+	}
+
+	exports.Set("run", js.FuncOf(run))
+	exports.Set("stop", js.FuncOf(stop))
+	exports.Set("version", js.FuncOf(version))
+	exports.Set("dispatchHttpRequest", js.FuncOf(dispatchHTTPRequest))
 	select {}
 }
 
