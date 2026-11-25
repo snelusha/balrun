@@ -1,4 +1,5 @@
 import { FsError } from "./fs";
+import { segments } from "./path";
 
 import type { Fs, FsDirEntry, FsFile, FsOpenFlags, FsStat } from "./fs";
 
@@ -181,15 +182,6 @@ class MemFile implements FsFile {
 		node.mtimeMs = Date.now();
 		return data.length;
 	}
-}
-
-function segments(path: string): string[] {
-	const names: string[] = [];
-	for (const name of path.split("/")) {
-		if (name === "..") names.pop();
-		else if (name !== "" && name !== ".") names.push(name);
-	}
-	return names;
 }
 
 function createFile(): FileNode {

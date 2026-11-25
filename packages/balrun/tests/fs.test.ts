@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import { FsError, NodeFS } from "../src/node";
 import { MemFS } from "../src/core/memfs";
+import { OPFS } from "../src/web/opfs";
+import { FakeOPFS } from "./fake-opfs";
 
 import type { Fs, FsFile, FsOpenFlags } from "../src/node";
 
@@ -61,17 +63,21 @@ describe("FsError", () => {
 	});
 });
 
-describe.each(["NodeFS", "MemFS"])("%s", (name) => {
+describe.each(["NodeFS", "MemFS", "OPFS"])("%s", (name) => {
 	let fs: Required<Pick<Fs, "mkdir" | "rm" | "rename" | "writeFile">> & Fs;
 	let root: string;
+	let opfs: FakeOPFS | undefined;
 	const at = (path: string) => (root === "." ? path : join(root, path));
 
 	beforeEach(async () => {
 		root = name === "NodeFS" ? await mkdtemp(join(tmpdir(), "balrun-fs-")) : ".";
-		fs = name === "NodeFS" ? new NodeFS() : new MemFS({});
+		if (name === "OPFS") opfs = new FakeOPFS();
+		fs = name === "NodeFS" ? new NodeFS() : name === "MemFS" ? new MemFS({}) : new OPFS();
 	});
 
 	afterEach(async () => {
+		opfs?.restore();
+		opfs = undefined;
 		if (root !== ".") await rm(root, { recursive: true });
 	});
 
@@ -203,6 +209,171 @@ describe("MemFS", () => {
 		const fs = new MemFS({ "a/b/c.txt": "c" });
 		expect(decode(fs.readFile("/a/./x/../b/c.txt"))).toBe("c");
 		expect(await codeOf(() => fs.mkdir(".", { recursive: false }))).toBe("EEXIST");
+	});
+});
+
+describe("OPFS", () => {
+	let opfs: FakeOPFS;
+	let fs: OPFS;
+
+	beforeEach(() => {
+		opfs = new FakeOPFS();
+		fs = new OPFS();
+	});
+
+	afterEach(() => opfs.restore());
+
+	const saved = async (path: string) => decode(await new OPFS().readFile(path));
+
+	it("keeps files for a new instance", async () => {
+		await fs.mkdir("a/b", { recursive: true });
+		await fs.writeFile("a/b/c.txt", "text");
+		expect(await saved("a/b/c.txt")).toBe("text");
+	});
+
+	it("keeps to its root directory", async () => {
+		const project = new OPFS({ root: "projects/one" });
+		await project.writeFile("../../main.bal", "text");
+		expect(await saved("projects/one/main.bal")).toBe("text");
+		expect(await fs.readdir(".")).toEqual([{ name: "projects", type: "dir" }]);
+	});
+
+	it("is created without OPFS and recovers once it is available", async () => {
+		opfs.restore();
+		expect(await codeOf(() => fs.readdir("."))).toBe("ENOTSUP");
+		opfs = new FakeOPFS();
+		expect(await fs.readdir(".")).toEqual([]);
+	});
+
+	it("fails writes without creating files where they are not supported", async () => {
+		await fs.writeFile("a.txt", "a");
+		await fs.mkdir("dir", { recursive: false });
+		opfs.disableWrites();
+		expect(await codeOf(() => fs.open("b.txt", WRITE))).toBe("ENOTSUP");
+		expect(await codeOf(() => fs.writeFile("b.txt", ""))).toBe("ENOTSUP");
+		expect(await codeOf(() => fs.access("a.txt", "write"))).toBe("ENOTSUP");
+		expect(await codeOf(() => fs.rename("a.txt", "b.txt"))).toBe("ENOTSUP");
+		expect(await codeOf(() => fs.open("dir", WRITE))).toBe("EISDIR");
+		expect(await codeOf(() => fs.stat("b.txt"))).toBe("ENOENT");
+		expect(await read(fs, "a.txt")).toBe("a");
+	});
+
+	it("shares open files and saves them on close", async () => {
+		await fs.writeFile("a.txt", "abc");
+		const reader = await fs.open("a.txt", READ);
+		const first = await fs.open("a.txt", { ...WRITE, append: true });
+		const second = await fs.open("a.txt", { ...WRITE, append: true });
+		first.write?.(0, encode("1"));
+		second.write?.(0, encode("2"));
+
+		expect(decode(await reader.read(0, 10))).toBe("abc12");
+		expect(decode(await fs.readFile("a.txt"))).toBe("abc12");
+		expect((await fs.stat("a.txt")).size).toBe(5);
+		expect(await saved("a.txt")).toBe("abc");
+
+		await first.close?.();
+		expect(await saved("a.txt")).toBe("abc12");
+		await second.close?.();
+		await fs.writeFile("a.txt", "new");
+		expect(decode(await reader.read(0, 10))).toBe("new");
+		await reader.close?.();
+		expect(await codeOf(() => reader.read(0, 1))).toBe("EBADF");
+	});
+
+	it("saves truncation and gaps", async () => {
+		await fs.writeFile("a.txt", "content");
+		await withFile(fs, "a.txt", { ...WRITE, truncate: true }, () => {});
+		expect(await saved("a.txt")).toBe("");
+		await withFile(fs, "a.txt", WRITE, async (file) => {
+			await file.write?.(2, encode("x"));
+		});
+		expect(Array.from(await new OPFS().readFile("a.txt"))).toEqual([0, 0, 120]);
+	});
+
+	it("saves written files at their new path after a rename", async () => {
+		await fs.mkdir("a", { recursive: false });
+		const file = await fs.open("a/x.txt", WRITE);
+		await file.write?.(0, encode("before "));
+		await fs.rename("a", "b");
+		await file.write?.(7, encode("after"));
+		await file.close?.();
+		expect(await saved("b/x.txt")).toBe("before after");
+		expect(await codeOf(() => fs.stat("a"))).toBe("ENOENT");
+	});
+
+	it("does not save over a path that was removed, replaced or recreated", async () => {
+		for (const change of [
+			() => fs.rm("a.txt", { recursive: false }).then(() => fs.writeFile("a.txt", "new")),
+			() => fs.writeFile("b.txt", "new").then(() => fs.rename("b.txt", "a.txt")),
+		]) {
+			await fs.writeFile("a.txt", "old");
+			const file = await fs.open("a.txt", WRITE);
+			await file.write?.(0, encode("stale"));
+			await change();
+			await file.close?.();
+			expect(await saved("a.txt")).toBe("new");
+		}
+		const file = await fs.open("a.txt", WRITE);
+		await file.write?.(0, encode("stale"));
+		await fs.rm("a.txt", { recursive: false });
+		await file.close?.();
+		expect(await codeOf(() => fs.stat("a.txt"))).toBe("ENOENT");
+	});
+
+	it("orders operations that are not awaited", async () => {
+		const file = await fs.open("a.txt", WRITE);
+		await file.write?.(0, encode("text"));
+		await Promise.all([file.close?.(), fs.rename("a.txt", "b.txt"), fs.rename("b.txt", "c.txt")]);
+		expect(await saved("c.txt")).toBe("text");
+		expect(await fs.readdir(".")).toEqual([{ name: "c.txt", type: "file" }]);
+	});
+
+	it("reports failed saves and keeps the previous contents", async () => {
+		await fs.writeFile("a.txt", "old");
+		opfs.failWrites("QuotaExceededError");
+		const file = await fs.open("a.txt", { ...WRITE, truncate: true });
+		await file.write?.(0, encode("new"));
+		expect(await codeOf(() => file.close?.())).toBe("ENOSPC");
+		expect(await codeOf(() => fs.writeFile("a.txt", "new"))).toBe("ENOSPC");
+		expect(decode(await fs.readFile("a.txt"))).toBe("old");
+
+		expect(await codeOf(() => fs.rename("a.txt", "b.txt"))).toBe("ENOSPC");
+		expect(await fs.readdir(".")).toEqual([{ name: "a.txt", type: "file" }]);
+
+		opfs.failWrites(undefined);
+		await fs.mkdir("from", { recursive: false });
+		await fs.mkdir("to", { recursive: false });
+		await fs.writeFile("from/x.txt", "x");
+		opfs.failWrites("QuotaExceededError");
+		expect(await codeOf(() => fs.rename("from", "to"))).toBe("ENOSPC");
+		expect(await saved("from/x.txt")).toBe("x");
+		expect(await fs.readdir("to")).toEqual([]);
+	});
+
+	it("reports files locked elsewhere and invalid names", async () => {
+		await fs.writeFile("a.txt", "a");
+		const handle = await (await navigator.storage.getDirectory()).getFileHandle("a.txt");
+		const writable = await handle.createWritable();
+		expect(await codeOf(() => fs.rm("a.txt", { recursive: false }))).toBe("EBUSY");
+		await writable.abort();
+		expect(await codeOf(() => fs.writeFile("a\\b", ""))).toBe("EINVAL");
+		expect(await codeOf(() => fs.rm(".", { recursive: true }))).toBe("EBUSY");
+		expect(await codeOf(() => fs.rename("a.txt", "a.txt"))).toBeUndefined();
+	});
+
+	it("copies the data it is given", async () => {
+		const data = encode("text");
+		const writing = fs.writeFile("a.txt", data);
+		data.fill(0);
+		await writing;
+		expect(await saved("a.txt")).toBe("text");
+	});
+
+	it("checks access without opening files", async () => {
+		await fs.writeFile("a.txt", "a");
+		await fs.access("a.txt", "write");
+		await fs.access(".", "write");
+		expect(await codeOf(() => fs.access("missing", "read"))).toBe("ENOENT");
 	});
 });
 

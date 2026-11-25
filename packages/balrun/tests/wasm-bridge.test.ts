@@ -55,6 +55,35 @@ describe("WasmBridge", () => {
 		return { fs, stdout, run };
 	}
 
+	/** Runs a program that leaves a file open for writing. */
+	async function leaveOpen(close: () => void | Promise<void>) {
+		const events: string[] = [];
+		const stderr: string[] = [];
+		const { fs } = await fixture("leave-open.bal", (files): Fs => {
+			const fs = new MemFS(files);
+			return {
+				stat: (path) => fs.stat(path),
+				readdir: (path) => fs.readdir(path),
+				open: (path, flags) => {
+					const file = fs.open(path, flags);
+					if (!flags.write) return file;
+					return {
+						read: file.read.bind(file),
+						write: file.write?.bind(file),
+						close: async () => {
+							events.push("closing");
+							await close();
+							events.push("closed");
+						},
+					};
+				},
+			};
+		});
+		const run = () =>
+			bridge.run(fs, "main.bal", { stderr: { write: (chunk) => stderr.push(chunk) } });
+		return { events, stderr, run };
+	}
+
 	describe("load", () => {
 		it("loads the WASM from a file path", async () => {
 			const bridge = await WasmBridge.load(WASM_PATH);
@@ -207,6 +236,22 @@ describe("WasmBridge", () => {
 			expect(stdout.join("")).toBe("first\nsecond\nthird\n8\n8\n3\n");
 			await Bun.sleep(0);
 			expect(open).toBe(0);
+		});
+
+		it("resolves once files left open for writing are closed", async () => {
+			const { events, run } = await leaveOpen(async () => {
+				await Bun.sleep(20);
+			});
+			expect(await run()).toBe(0);
+			expect(events).toEqual(["closing", "closed"]);
+		});
+
+		it("reports files that fail to close", async () => {
+			const { stderr, run } = await leaveOpen(() => {
+				throw new FsError("ENOSPC");
+			});
+			expect(await run()).toBe(0);
+			expect(stderr.join("")).toContain("error: close out.txt: ");
 		});
 
 		it("closes files whose open finishes after the run ends", async () => {

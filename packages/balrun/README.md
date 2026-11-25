@@ -136,6 +136,23 @@ const fs = new MemFS({ "main.bal": "public function main() {}" });
 await new Ballerina({ fs }).run("main.bal");
 ```
 
+`MemFS` is lost on reload. To keep files, use `OPFS`, which stores them in the browser's [Origin Private File System](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system):
+
+```ts
+import { Ballerina, OPFS } from "@snelusha/balrun/web";
+
+const fs = new OPFS({ root: "my-project" }); // defaults to the root of the origin's OPFS
+
+await fs.writeFile("main.bal", "public function main() {}");
+await new Ballerina({ fs }).run("main.bal");
+```
+
+- OPFS needs a secure context (HTTPS or `localhost`), and may be unavailable in private browsing. Writing needs Chrome 86, Firefox 111 or Safari 26. Where something is missing, operations fail with `ENOTSUP`.
+- Open files are held in memory and saved when closed. `run()` closes what the program left open before it resolves, but a reload in the middle of a run loses unsaved writes.
+- Use one `OPFS` per `root`. Instances and tabs are not coordinated: the last one to save a file wins.
+- Renaming copies and then deletes, so it is not atomic and changes modification times. Directories have no modification time.
+- Browsers may evict stored files. Call `navigator.storage.persist()` to ask them not to.
+
 Or implement `Fs`:
 
 ```ts
@@ -163,6 +180,7 @@ await new Ballerina({ fs }).run("main.bal");
 
 - File contents are always `Uint8Array`.
 - Methods may return a value or a promise.
+- `run()` waits for files left open for writing to close.
 - Errors are thrown with a code: an `FsError`, or any error with a string `code`, such as Node.js errors. Other errors become `EIO`.
 - `stat`, `readdir` and `open` are required. `mkdir`, `rm` and `rename` are optional, and programs get `EROFS` when they are missing.
 - Paths are relative to the filesystem root (`.`). Set `supportsAbsolutePaths` to accept absolute paths too; without it, a program's absolute paths start from the root.

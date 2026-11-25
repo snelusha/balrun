@@ -180,7 +180,7 @@ func (b *bridgeFS) openFile(name string, flag int) (*bridgeFile, error) {
 		return nil, pathError("open", name, syscall.EINVAL)
 	}
 
-	file := &bridgeFile{fsys: b, name: name, handle: handle}
+	file := &bridgeFile{fsys: b, name: name, handle: handle, writable: write}
 	if write && !hasMethod(handle, "write") {
 		_ = file.closeHandle()
 		return nil, pathError("open", name, syscall.EACCES)
@@ -288,21 +288,33 @@ func (b *bridgeFS) track(file *bridgeFile) bool {
 	return true
 }
 
-func (b *bridgeFS) closeAll() {
+// closeAll waits only for files open for writing: closing them may be what saves
+// them, while a pending read may never finish.
+func (b *bridgeFS) closeAll() error {
 	b.mu.Lock()
 	b.closed = true
 	files := b.open
 	b.open = make(map[*bridgeFile]struct{})
 	b.mu.Unlock()
+
+	var errs []error
 	for file := range files {
-		_ = file.Close()
+		if !file.writable {
+			go func() { _ = file.Close() }()
+			continue
+		}
+		if err := file.Close(); err != nil && !errors.Is(err, fs.ErrClosed) {
+			errs = append(errs, err)
+		}
 	}
+	return errors.Join(errs...)
 }
 
 type bridgeFile struct {
-	fsys   *bridgeFS
-	name   string
-	handle js.Value
+	fsys     *bridgeFS
+	name     string
+	handle   js.Value
+	writable bool
 
 	mu     sync.Mutex
 	offset int64
@@ -392,9 +404,12 @@ func (f *bridgeFile) Close() error {
 	}
 	f.closed = true
 
-	f.fsys.mu.Lock()
-	delete(f.fsys.open, f)
-	f.fsys.mu.Unlock()
+	// Untracked only once closed, so closeAll waits for a close in progress.
+	defer func() {
+		f.fsys.mu.Lock()
+		delete(f.fsys.open, f)
+		f.fsys.mu.Unlock()
+	}()
 	return f.closeHandle()
 }
 

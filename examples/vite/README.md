@@ -14,6 +14,6 @@ bun -F example-vite dev
 ## How It Works
 
 - `@snelusha/balrun/react` initializes the Ballerina runtime with `useBallerina`
-- A small virtual file system provides `main.bal` from the editor contents
+- `OPFS` stores `main.bal` in the browser, so the editor contents persist across reloads
 - `stdout` and `stderr` are written into the output textarea
-- The virtual file system is kept stable so editing code does not reinitialize the runtime
+- The filesystem is created once, so editing code does not reinitialize the runtime

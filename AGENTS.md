@@ -21,6 +21,7 @@ Useful root scripts:
 - `bun install --frozen-lockfile`
 - `bun run build` — Turbo build across workspaces
 - `bun run test` — Turbo test across workspaces
+- `bun run test:browser` — OPFS tests in real browsers (first `bunx playwright install` in `packages/balrun`; `BROWSERS=chromium` picks one)
 - `bun run lint` / `bun run lint:fix` — Oxlint (and safe auto-fixes)
 - `bun run format` / `bun run format:check` — Oxfmt (write / verify formatting)
 

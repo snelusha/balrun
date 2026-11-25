@@ -14,7 +14,9 @@ README.md documents the public API. This file covers the rules and the parts tha
 
 - `src/core/fs.ts` is the contract; `packages/ballerina-wasm/bridge_fs_wasm.go` is its only caller. Change them together.
 - Contents cross the boundary as `Uint8Array`, never as text. Failures are thrown with a code; `errno_wasm.go` lists the codes Go understands.
-- `tests/fs.test.ts` runs the same tests against `NodeFS` and `MemFS`.
+- `tests/fs.test.ts` runs the same tests against `NodeFS`, `MemFS` and `OPFS`, the last on `tests/fake-opfs.ts`, which mimics Chromium's locks, dead snapshots and commit-on-close. `tests/browser/opfs.ts` checks the real thing.
+- `OPFS` keeps open files in memory and saves on close. `File` snapshots die when the file changes, and open writable streams lock the file and hide writes, so hold neither across calls. `FileSystemHandle.move()` is non-standard.
+- `run()` resolves after files left open for writing are closed, as closing may be what saves them. It does not wait for read-only files: a pending read may never finish.
 
 ## Build (`bun run build`, `tsdown.config.ts`)
 

@@ -6,6 +6,9 @@ import type { BallerinaOptions } from "./core/ballerina";
 import type { WasmSource } from "./core/bridge";
 
 export * from "./core/index";
+export { OPFS } from "./web/opfs";
+
+export type { OPFSOptions } from "./web/opfs";
 
 export const bundledWasmUrl: URL = new URL("./ballerina.wasm", import.meta.url);
 

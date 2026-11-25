@@ -12,6 +12,7 @@
 		"build": "turbo run build",
 		"build:balrun": "turbo run build --filter=@snelusha/balrun",
 		"test": "turbo run test",
+		"test:browser": "turbo run test:browser",
 		"typecheck": "turbo run typecheck",
 		"format": "oxfmt",
 		"format:check": "oxfmt --check",

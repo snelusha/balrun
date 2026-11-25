@@ -46,3 +46,10 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      - name: Install browsers
+        working-directory: packages/balrun
+        run: bunx playwright install --with-deps chromium firefox webkit
+
+      - name: Test in browsers
+        run: bun run test:browser

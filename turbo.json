@@ -9,6 +9,11 @@
 			"dependsOn": ["^build"],
 			"outputs": []
 		},
+		"test:browser": {
+			"dependsOn": ["build"],
+			"env": ["BROWSERS"],
+			"outputs": []
+		},
 		"typecheck": {
 			"dependsOn": ["^typecheck"],
 			"inputs": ["src/**", "scripts/**", "tsconfig.json", "package.json"],
