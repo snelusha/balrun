@@ -76,6 +76,29 @@ describe("CLI", () => {
 		});
 	}
 
+	for (const flag of ["--help", "-h"]) {
+		it(`prints usage with ${flag}`, async () => {
+			const result = await runCli([flag]);
+
+			expect(result.exitCode).toBe(0);
+			expect(result.stdout).toStartWith("usage: balrun");
+			expect(result.stdout).toContain("--help");
+			expect(result.stdout).toContain("--version");
+			expect(result.stderr).toBe("");
+		});
+	}
+
+	for (const args of [["--unknown"], ["-x"], [fixturePath("hello.bal"), "--unknown"]]) {
+		it(`rejects unknown flag ${args.at(-1)} as argument ${args.length}`, async () => {
+			const result = await runCli(args);
+
+			expect(result.exitCode).toBe(1);
+			expect(result.stdout).toBe("");
+			expect(result.stderr).toContain(`'${args.at(-1)}'`);
+			expect(result.stderr).toContain("usage: balrun");
+		});
+	}
+
 	it("prints usage and exits 1 when no path is provided", async () => {
 		const result = await runCli([]);
 

@@ -1,10 +1,41 @@
 #!/usr/bin/env node
 
+import { parseArgs } from "node:util";
+
 import { Ballerina } from "../dist/node.mjs";
 
-const argument = process.argv[2];
+const USAGE = `usage: balrun [options] <source-file.bal | package-dir | .>
 
-if (argument === "--version" || argument === "-v") {
+Options:
+  -h, --help     Print this help message and exit
+  -v, --version  Print version information and exit
+`;
+
+let args;
+try {
+	args = parseArgs({
+		allowPositionals: true,
+		options: {
+			help: { type: "boolean", short: "h" },
+			version: { type: "boolean", short: "v" },
+		},
+	});
+} catch (error) {
+	process.stderr.write(`error: ${error.message}\n\n${USAGE}`);
+	process.exit(1);
+}
+
+const {
+	values,
+	positionals: [path],
+} = args;
+
+if (values.help) {
+	process.stdout.write(USAGE);
+	process.exit(0);
+}
+
+if (values.version) {
 	try {
 		const version = await new Ballerina().version();
 		process.stdout.write(
@@ -17,12 +48,11 @@ if (argument === "--version" || argument === "-v") {
 	}
 }
 
-if (!argument) {
-	process.stderr.write("usage: balrun [--version | -v | <source-file.bal> | <package-dir> | .]\n");
+if (!path) {
+	process.stderr.write(USAGE);
 	process.exit(1);
 }
 
-const path = argument;
 const keepAlive = setInterval(() => {}, 1_000);
 
 const ballerina = new Ballerina({
