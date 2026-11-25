@@ -1,3 +1,0 @@
-[submodule "packages/ballerina-wasm/ballerina"]
-	path = packages/ballerina-wasm/ballerina
-	url = https://github.com/ballerina-nutcracker/ballerina

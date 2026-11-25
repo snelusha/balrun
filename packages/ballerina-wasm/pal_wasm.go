@@ -36,6 +36,7 @@ func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.Si
 		Time: pal.Time{
 			Now:          time.Now,
 			MonotonicNow: func() time.Duration { return time.Since(processStart) },
+			AfterFunc:    func(d time.Duration, f func()) pal.Timer { return time.AfterFunc(d, f) },
 		},
 		Signals: signals,
 	}
