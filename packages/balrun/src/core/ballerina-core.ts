@@ -1,4 +1,4 @@
-import type { FS } from "./fs/core";
+import type { FS } from "./fs";
 import type { HTTPDispatchRequest, HTTPListenerReady, HTTPListenerResponse } from "./http-listener";
 import type { Environment } from "./os";
 

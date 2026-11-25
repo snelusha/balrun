@@ -5,19 +5,16 @@ import {
 	useContext,
 	useEffect,
 	useMemo,
-	useRef,
 	useState,
 } from "react";
 
-import { Ballerina } from "./ballerina";
-
 import type { ReactNode } from "react";
 
-import type { BallerinaRunOptions, BallerinaRunResult } from "./ballerina-core";
-import type { BallerinaOptions } from "./ballerina";
-import type { Environment } from "./os";
+import type { Ballerina } from "./core/ballerina";
+import type { BallerinaRunOptions, BallerinaRunResult } from "./core/ballerina-core";
 
 export interface BallerinaContextValue {
+	ballerina: Ballerina;
 	isReady: boolean;
 	error: Error | null;
 	run: (path: string, options?: BallerinaRunOptions) => Promise<BallerinaRunResult>;
@@ -25,58 +22,55 @@ export interface BallerinaContextValue {
 
 const BallerinaContext = createContext<BallerinaContextValue | null>(null);
 
-export interface BallerinaProviderProps extends BallerinaOptions {
+export interface BallerinaProviderProps {
+	ballerina: Ballerina;
 	children?: ReactNode;
-	/** Keep this map reference stable by memoizing or hoisting it to avoid reinitializing the runtime. */
-	env?: Environment;
 }
 
-export function BallerinaProvider({ children, ...options }: BallerinaProviderProps) {
-	const ballerinaRef = useRef<Ballerina | null>(null);
-
-	const [isReady, setIsReady] = useState(false);
-	const [error, setError] = useState<Error | null>(null);
-
-	const { fs, core, wasmSource, colors, stdout, stderr, env } = options;
-
-	const opts = useMemo(
-		() => ({ fs, core, wasmSource, colors, stdout, stderr, env }),
-		[fs, core, wasmSource, colors, stdout, stderr, env],
-	);
+export function BallerinaProvider({ ballerina, children }: BallerinaProviderProps) {
+	const [ready, setReady] = useState<Ballerina | null>(null);
+	const [failure, setFailure] = useState<{ ballerina: Ballerina; error: Error } | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
-		const ballerina = new Ballerina(opts);
 
-		ballerinaRef.current = ballerina;
-		setIsReady(false);
-		setError(null);
-
-		ballerina
-			.init()
-			.then(() => !cancelled && setIsReady(true))
-			.catch(
-				(err) =>
-					!cancelled &&
-					setError(err instanceof Error ? err : new Error(`[balrun]: ${String(err)}`)),
-			);
+		ballerina.init().then(
+			() => {
+				if (!cancelled) setReady(ballerina);
+			},
+			(err: unknown) => {
+				if (cancelled) return;
+				setFailure({
+					ballerina,
+					error: err instanceof Error ? err : new Error(`[balrun]: ${String(err)}`),
+				});
+			},
+		);
 
 		return () => {
 			cancelled = true;
-			if (ballerinaRef.current === ballerina) ballerinaRef.current = null;
+			setFailure(null);
 		};
-	}, [opts]);
+	}, [ballerina]);
+
+	const isReady = ready === ballerina;
+	const error = failure?.ballerina === ballerina ? failure.error : null;
 
 	const run = useCallback(
 		(path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> => {
-			if (!ballerinaRef.current || !isReady)
+			if (!isReady)
 				return Promise.reject(new Error("[balrun]: runtime instance is not initialized."));
-			return ballerinaRef.current.run(path, options);
+			return ballerina.run(path, options);
 		},
-		[isReady],
+		[ballerina, isReady],
 	);
 
-	return createElement(BallerinaContext.Provider, { value: { isReady, error, run } }, children);
+	const value = useMemo(
+		() => ({ ballerina, isReady, error, run }),
+		[ballerina, isReady, error, run],
+	);
+
+	return createElement(BallerinaContext.Provider, { value }, children);
 }
 
 export function useBallerina(): BallerinaContextValue {

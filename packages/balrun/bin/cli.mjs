@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Ballerina } from "../dist/index.mjs";
+import { Ballerina } from "../dist/node.mjs";
 
 const argument = process.argv[2];
 

@@ -1,4 +1,4 @@
-import type { FS } from "./fs/core";
+import type { FS } from "./fs";
 import type { BallerinaRunOptions, BallerinaStopMode } from "./ballerina-core";
 import type { HTTPListenerRequest, HTTPListenerResponse } from "./http-listener";
 

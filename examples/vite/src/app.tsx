@@ -1,8 +1,10 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
+import { Ballerina } from "@snelusha/balrun";
 import { BallerinaProvider, useBallerina } from "@snelusha/balrun/react";
 
 import type { DirEntry, FS, OpenResult, StatResult } from "@snelusha/balrun";
+import type { RefObject } from "react";
 
 const DEFAULT_CODE = `import ballerina/io;
 
@@ -10,65 +12,58 @@ public function main() {
     io:println("Hello from Ballerina!");
 }`;
 
+function createFS(code: RefObject<string>): FS {
+	return {
+		open: async (path): Promise<OpenResult | null> => {
+			if (path === "main.bal") {
+				const content = code.current;
+				return { content, size: content.length, modTime: 0, isDir: false };
+			}
+			return null;
+		},
+		stat: async (path): Promise<StatResult | null> => {
+			if (path === "main.bal") {
+				const content = code.current;
+				return { name: path, size: content.length, modTime: 0, isDir: false };
+			}
+			return null;
+		},
+		readDir: (_path: string): Promise<DirEntry[] | null> => {
+			throw new Error("not implemented");
+		},
+		writeFile: (_path: string, _content: string): Promise<boolean> => {
+			throw new Error("not implemented");
+		},
+		remove: (_path: string): Promise<boolean> => {
+			throw new Error("not implemented");
+		},
+		move: (_oldPath: string, _newPath: string): Promise<boolean> => {
+			throw new Error("not implemented");
+		},
+		mkdirAll: (_path: string): Promise<boolean> => {
+			throw new Error("not implemented");
+		},
+	};
+}
+
 export default function App() {
 	const [code, setCode] = useState(DEFAULT_CODE);
 	const [output, setOutput] = useState("no output");
 
 	const codeRef = useRef(DEFAULT_CODE);
 
+	const [ballerina] = useState(() => {
+		const writer = { write: (chunk: string) => setOutput((prev) => prev + chunk) };
+		return new Ballerina({ fs: createFS(codeRef), stdout: writer, stderr: writer, colors: false });
+	});
+
 	const updateCode = (value: string) => {
 		codeRef.current = value;
 		setCode(value);
 	};
 
-	const fs = useMemo(
-		() =>
-			({
-				open: async (path): Promise<OpenResult | null> => {
-					if (path === "main.bal") {
-						const content = codeRef.current;
-						return { content, size: content.length, modTime: 0, isDir: false };
-					}
-					return null;
-				},
-				stat: async (path): Promise<StatResult | null> => {
-					if (path === "main.bal") {
-						const content = codeRef.current;
-						return {
-							name: path,
-							size: content.length,
-							modTime: 0,
-							isDir: false,
-						};
-					}
-					return null;
-				},
-				readDir: (_path: string): Promise<DirEntry[] | null> => {
-					throw new Error("not implemented");
-				},
-				writeFile: (_path: string, _content: string): Promise<boolean> => {
-					throw new Error("not implemented");
-				},
-				remove: (_path: string): Promise<boolean> => {
-					throw new Error("not implemented");
-				},
-				move: (_oldPath: string, _newPath: string): Promise<boolean> => {
-					throw new Error("not implemented");
-				},
-				mkdirAll: (_path: string): Promise<boolean> => {
-					throw new Error("not implemented");
-				},
-			}) satisfies FS,
-		[],
-	);
-
-	const outputWriter = useMemo(
-		() => ({ write: (chunk: string) => setOutput((prev) => prev + chunk) }),
-		[],
-	);
-
 	return (
-		<BallerinaProvider fs={fs} stdout={outputWriter} stderr={outputWriter} colors={false}>
+		<BallerinaProvider ballerina={ballerina}>
 			<RunEditor
 				code={code}
 				output={output}

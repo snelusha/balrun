@@ -1,9 +1,6 @@
-import { NodeFS } from "./fs/node";
-
+import { WasmBridge } from "./bridge";
 import { BALRUN_VERSION } from "./version";
 
-import type { FS } from "./fs/core";
-import type { HTTPDispatchRequest, HTTPListenerResponse } from "./http-listener";
 import type {
 	BallerinaCore,
 	BallerinaRunOptions,
@@ -11,8 +8,9 @@ import type {
 	BalrunVersion,
 	BallerinaStopMode,
 } from "./ballerina-core";
-
-const DEFAULT_WASM_PATH = new URL("./ballerina.wasm", import.meta.url).href;
+import type { FS } from "./fs";
+import type { HTTPDispatchRequest, HTTPListenerResponse } from "./http-listener";
+import type { Platform } from "./platform";
 
 export interface BallerinaOptions extends BallerinaRunOptions {
 	/** Filesystem exposed to the Ballerina runtime. Defaults to the Node adapter in Node.js. Required in browsers. */
@@ -27,6 +25,7 @@ export interface BallerinaOptions extends BallerinaRunOptions {
 }
 
 export class Ballerina {
+	private _platform: Platform;
 	private _coreOption: BallerinaCore | undefined;
 	private _wasmSource: string | undefined;
 	private _bridge: BallerinaCore | null = null;
@@ -35,7 +34,8 @@ export class Ballerina {
 	private _fs: FS | undefined;
 	private _defaults: BallerinaOptions;
 
-	constructor(options: BallerinaOptions = {}) {
+	constructor(platform: Platform, options: BallerinaOptions = {}) {
+		this._platform = platform;
 		this._fs = options.fs;
 		this._coreOption = options.core;
 		this._wasmSource = options.wasmSource;
@@ -59,11 +59,9 @@ export class Ballerina {
 
 		this._bridgePromise ??= (async () => {
 			try {
-				const bridge = this._coreOption
-					? this._coreOption
-					: await import("./wasm-bridge").then(({ WasmBridge }) =>
-							WasmBridge.load(this._wasmSource ?? DEFAULT_WASM_PATH),
-						);
+				const bridge =
+					this._coreOption ??
+					(await new WasmBridge(this._platform).start(this._wasmSource ?? this._platform.wasm));
 
 				this._bridge = bridge;
 				return bridge;
@@ -80,10 +78,10 @@ export class Ballerina {
 
 	private async fs(): Promise<FS> {
 		if (this._fs) return this._fs;
-		if (!supportsNodeFS())
-			throw new Error("[balrun]: `fs` option is required outside Node-compatible environments.");
 
-		const fs = new NodeFS();
+		const fs = this._platform.defaultFS?.();
+		if (!fs)
+			throw new Error("[balrun]: `fs` option is required outside Node-compatible environments.");
 		this._fs = fs;
 		return fs;
 	}
@@ -111,8 +109,4 @@ export class Ballerina {
 	async dispatchHttpRequest(request: HTTPDispatchRequest): Promise<HTTPListenerResponse> {
 		return (await this.bridge()).dispatchHttpRequest(request);
 	}
-}
-
-function supportsNodeFS(): boolean {
-	return typeof process !== "undefined" && !!process.versions?.node;
 }
