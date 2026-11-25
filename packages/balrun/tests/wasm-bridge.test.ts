@@ -1,12 +1,48 @@
 import { beforeAll, describe, expect, it } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { WasmBridge } from "../src/node";
+import { FsError, NodeFS, WasmBridge } from "../src/node";
 import { MemFS } from "./memfs";
 
 import type { WasmExports } from "../src/core/bridge";
+import type { Fs, FsFile, FsOpenFlags } from "../src/node";
 
 const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
+
+const READ: FsOpenFlags = {
+	read: true,
+	write: false,
+	create: false,
+	truncate: false,
+	append: false,
+	exclusive: false,
+};
+
+const FILE_OPS_OUTPUT = [
+	"true",
+	"true",
+	"content",
+	"true",
+	"true",
+	"content",
+	"a.txt false true true",
+	"nested true true true",
+	"true",
+	"content",
+	"temp",
+	"true",
+	"true",
+	"false",
+	"true",
+	"true",
+];
+const unsupportedCopy = (path: string) =>
+	`An error occurred when copying the file/s: ${path}: unsupported operation`;
+
+const lines = (chunks: string[]) => chunks.join("").trimEnd().split("\n");
 
 describe("WasmBridge", () => {
 	let bridge: WasmBridge;
@@ -14,6 +50,19 @@ describe("WasmBridge", () => {
 	beforeAll(async () => {
 		bridge = await WasmBridge.load(WASM_PATH);
 	});
+
+	async function fixture<T extends Fs = MemFS>(
+		name: string,
+		createFs: (files: Record<string, string>) => T = (files) => new MemFS(files) as Fs as T,
+	) {
+		const fs = createFs({
+			"main.bal": await Bun.file(new URL(`./fixtures/${name}`, import.meta.url)).text(),
+		});
+		const stdout: string[] = [];
+		const run = () =>
+			bridge.run(fs, "main.bal", { stdout: { write: (chunk) => stdout.push(chunk) } });
+		return { fs, stdout, run };
+	}
 
 	describe("load", () => {
 		it("loads the WASM from a file path", async () => {
@@ -137,6 +186,189 @@ describe("WasmBridge", () => {
 			expect(stdout.join("")).toBe("first second\n");
 		});
 
+		it("keeps binary content unchanged", async () => {
+			const { fs, stdout, run } = await fixture("binary-io.bal");
+
+			expect(await run()).toBe(0);
+			expect(stdout.join("")).toBe("[255,254,0,128]\n");
+			expect(Array.from(await fs.open("b.bin", READ).read(0, 16))).toEqual([
+				0xff, 0xfe, 0x00, 0x80,
+			]);
+		});
+
+		it("streams files and closes the ones left open", async () => {
+			let open = 0;
+			class CountingFS extends MemFS {
+				override open(path: string, flags: FsOpenFlags): FsFile {
+					const file = super.open(path, flags);
+					open++;
+					return {
+						read: async (offset, length) => file.read(offset, length),
+						write: file.write && (async (offset, data) => file.write!(offset, data)),
+						close: () => {
+							open--;
+						},
+					};
+				}
+			}
+			const { stdout, run } = await fixture("stream-io.bal", (files) => new CountingFS(files));
+			open = 0;
+
+			expect(await run()).toBe(0);
+			expect(stdout.join("")).toBe("first\nsecond\nthird\n8\n8\n3\n");
+			await Bun.sleep(0);
+			expect(open).toBe(0);
+		});
+
+		it("closes files whose open finishes after the run ends", async () => {
+			const opening = Promise.withResolvers<void>();
+			const finishOpen = Promise.withResolvers<void>();
+			const closed = Promise.withResolvers<void>();
+			const { fs } = await fixture("late-open.bal", (files): Fs => {
+				const fs = new MemFS({ ...files, "late.bin": "" });
+				return {
+					stat: (path) => fs.stat(path),
+					readdir: (path) => fs.readdir(path),
+					open: async (path, flags) => {
+						const file = fs.open(path, flags);
+						if (path !== "late.bin") return file;
+						opening.resolve();
+						await finishOpen.promise;
+						return {
+							read: () => {
+								throw new FsError("EIO");
+							},
+							close: () => closed.resolve(),
+						};
+					},
+				};
+			});
+
+			const listening = Promise.withResolvers<void>();
+			const result = bridge.run(fs, "main.bal", { onListenerReady: () => listening.resolve() });
+			await listening.promise;
+			const request = { host: "localhost", port: 6969, path: "/read" };
+			void bridge.dispatchHttpRequest(request).catch(() => {});
+			await opening.promise;
+			expect(bridge.stop("immediate")).toBe(true);
+			await result;
+			await Bun.sleep(0);
+			finishOpen.resolve();
+			await closed.promise;
+		});
+
+		it("continues short writes", async () => {
+			const { stdout, run } = await fixture("binary-io.bal", (files): Fs => {
+				const fs = new MemFS(files);
+				return {
+					stat: (path) => fs.stat(path),
+					readdir: (path) => fs.readdir(path),
+					open: (path, flags) => {
+						const file = fs.open(path, flags);
+						return {
+							read: file.read.bind(file),
+							write: file.write && ((offset, data) => file.write!(offset, data.subarray(0, 1))),
+						};
+					},
+				};
+			});
+
+			expect(await run()).toBe(0);
+			expect(stdout.join("")).toBe("[255,254,0,128]\n");
+		});
+
+		it("reports thenables that throw", async () => {
+			class ThrowingFS extends MemFS {
+				override open(path: string, flags: FsOpenFlags): FsFile {
+					if (path !== "denied.txt") return super.open(path, flags);
+					return {
+						// oxlint-disable-next-line unicorn/no-thenable
+						then() {
+							throw new FsError("EACCES");
+						},
+					} as unknown as FsFile;
+				}
+			}
+			const { stdout, run } = await fixture("fs-errors.bal", (files) => new ThrowingFS(files));
+
+			expect(await run()).toBe(0);
+			expect(lines(stdout)).toContain(
+				"error while reading file 'denied.txt': open denied.txt: Permission denied",
+			);
+		});
+
+		it("preserves error codes", async () => {
+			class FailingFS extends MemFS {
+				override open(path: string, flags: FsOpenFlags): FsFile {
+					if (path === "denied.txt") throw new FsError("EACCES");
+					if (path === "broken.txt") throw new Error("disk on fire");
+					if (path === "thrown.txt") throw undefined;
+					if (path === "dir/new.txt") throw new FsError("ENOSPC");
+					return super.open(path, flags);
+				}
+			}
+			const { stdout, run } = await fixture("fs-errors.bal", (files) => {
+				const fs = new FailingFS(files);
+				fs.mkdir("dir", { recursive: true });
+				return fs;
+			});
+
+			expect(await run()).toBe(0);
+			expect(lines(stdout)).toEqual([
+				"error while reading file 'missing.txt': open missing.txt: No such file or directory",
+				"error while reading file 'dir': open dir: Is a directory",
+				"error while reading file 'denied.txt': open denied.txt: Permission denied",
+				"error while reading file 'broken.txt': open broken.txt: disk on fire",
+				"error while reading file 'thrown.txt': open thrown.txt: I/O error",
+				"error while writing to file 'dir/new.txt': write dir/new.txt: No space left on device",
+			]);
+		});
+
+		it("treats filesystems without change methods as read-only", async () => {
+			const { stdout, run } = await fixture("fs-errors.bal", (files) => {
+				const fs = new MemFS({ ...files, "dir/a.txt": "" });
+				return {
+					stat: (path) => fs.stat(path),
+					readdir: (path) => fs.readdir(path),
+					open: (path, flags) => {
+						if (flags.write) throw new FsError("EROFS", path);
+						const file = fs.open(path, flags);
+						return { read: (offset, length) => file.read(offset, length) };
+					},
+				};
+			});
+
+			expect(await run()).toBe(0);
+			expect(lines(stdout).at(-1)).toBe(
+				"error while writing to file 'dir/new.txt': open dir/new.txt: Read-only file system",
+			);
+		});
+
+		it("supports file operations with an in-memory filesystem", async () => {
+			const { stdout, run } = await fixture("file-ops.bal");
+
+			expect(await run()).toBe(0);
+			expect(lines(stdout)).toEqual([...FILE_OPS_OUTPUT, unsupportedCopy("main.bal")]);
+		});
+
+		it("supports file operations with NodeFS", async () => {
+			const root = await mkdtemp(join(tmpdir(), "balrun-"));
+			try {
+				const main = join(root, "main.bal");
+				await Bun.write(main, Bun.file(new URL("./fixtures/file-ops.bal", import.meta.url)));
+				const stdout: string[] = [];
+
+				expect(
+					await bridge.run(new NodeFS(), main, {
+						stdout: { write: (chunk) => stdout.push(chunk) },
+					}),
+				).toBe(0);
+				expect(lines(stdout)).toEqual([...FILE_OPS_OUTPUT, unsupportedCopy(main)]);
+			} finally {
+				await rm(root, { recursive: true });
+			}
+		});
+
 		it("supports OS operations and subprocesses", async () => {
 			const fs = new MemFS({
 				"main.bal": await Bun.file(new URL("./fixtures/os.bal", import.meta.url)).text(),
@@ -158,7 +390,7 @@ describe("WasmBridge", () => {
 			});
 
 			expect(exitCode).toBe(1);
-			expect(stderr.join("")).toBe("error: open missing.bal: file does not exist\n");
+			expect(stderr.join("")).toBe("error: stat missing.bal: No such file or directory\n");
 		});
 
 		it("serves HTTP listeners and stops them", async () => {

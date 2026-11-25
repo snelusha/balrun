@@ -1,4 +1,4 @@
-import type { FS } from "./fs";
+import type { Fs } from "./fs";
 import type { HTTPDispatchRequest, HTTPListenerReady, HTTPListenerResponse } from "./http-listener";
 import type { Environment } from "./os";
 
@@ -30,7 +30,7 @@ export interface BalrunVersion {
 }
 
 export interface BallerinaCore {
-	run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult>;
+	run(proxy: Fs, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult>;
 	version(): Promise<BallerinaInterpreterVersion>;
 	stop(mode: BallerinaStopMode): boolean;
 	dispatchHttpRequest(request: HTTPDispatchRequest): Promise<HTTPListenerResponse>;

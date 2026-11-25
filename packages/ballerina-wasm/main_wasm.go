@@ -120,6 +120,10 @@ func run(_ js.Value, args []js.Value) any {
 		proxy := args[0]
 		runPath := args[1].String()
 
+		// Deferred before the run context, so waiting for files to close never blocks the next run.
+		fsys := newBridgeFS(proxy)
+		defer fsys.closeAll()
+
 		signalSource, signals := newSignalSource()
 		if !activeRunContext.begin(signalSource) {
 			signalSource.cleanup()
@@ -135,8 +139,6 @@ func run(_ js.Value, args []js.Value) any {
 				resolve.Invoke(1)
 			}
 		}()
-
-		fsys := NewBridgeFS(proxy)
 
 		result, err := projects.Load(fsys, runPath)
 		if err != nil {

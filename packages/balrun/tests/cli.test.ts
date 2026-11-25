@@ -120,7 +120,7 @@ describe("CLI", () => {
 
 		expect(result.exitCode).toBe(1);
 		expect(result.stderr).toContain("error:");
-		expect(result.stderr).toContain("file does not exist");
+		expect(result.stderr).toContain("No such file or directory");
 	});
 
 	it("forwards SIGINT as a graceful stop", async () => {
