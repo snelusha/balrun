@@ -10,6 +10,12 @@ README.md documents the public API. This file covers the rules and the parts tha
 - `src/react.ts` imports only from `src/core/`. `BallerinaProvider` takes a `Ballerina` instance and never chooses a platform.
 - Use erasable TypeScript syntax only (no enums, namespaces or parameter properties), and `import type` for types. There are no runtime dependencies.
 
+## Filesystem
+
+- `src/core/fs.ts` is the contract; `packages/ballerina-wasm/bridge_fs_wasm.go` is its only caller. Change them together.
+- Contents cross the boundary as `Uint8Array`, never as text. Failures are thrown with a code; `errno_wasm.go` lists the codes Go understands.
+- `tests/fs.test.ts` runs the same tests against `NodeFS` and the test `MemFS`.
+
 ## Build (`bun run build`, `tsdown.config.ts`)
 
 - Entries `src/node.ts`, `src/web.ts` and `src/react.ts` become `dist/node.mjs`, `dist/web.mjs` and `dist/react.mjs`. `.` resolves to `dist/node.mjs` under the `node` condition (Node.js, Bun) and to `dist/web.mjs` elsewhere.

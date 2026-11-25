@@ -126,18 +126,38 @@ await new Ballerina({ stdout: writer, stderr: writer }).run("./main.bal");
 
 ### `fs`
 
-`Ballerina` reads files through the `FS` interface. In Node.js environments, this defaults to the built-in Node adapter. In browsers, pass an `fs` implementation explicitly.
+`Ballerina` accesses files through the `Fs` interface. In Node.js environments, this defaults to the built-in Node adapter. In browsers, pass an `fs` implementation explicitly.
 
 ```ts
-import { Ballerina, type FS } from "@snelusha/balrun";
+import { Ballerina, FsError, type Fs } from "@snelusha/balrun";
 
-class MemFS implements FS {
-  // When running a single file, only `open` and `stat` are required.
-  // When running a package, `readDir` is also required.
-}
+const source = new TextEncoder().encode("public function main() {}");
 
-await new Ballerina({ fs: new MemFS() }).run("main.bal");
+const fs: Fs = {
+  stat(path) {
+    if (path !== "main.bal") throw new FsError("ENOENT", path);
+    return { type: "file", size: source.length, mtimeMs: 0 };
+  },
+  readdir(path) {
+    throw new FsError("ENOENT", path);
+  },
+  open(path, flags) {
+    if (flags.write) throw new FsError("EROFS", path);
+    if (path !== "main.bal") throw new FsError("ENOENT", path);
+    return { read: (offset, length) => source.subarray(offset, offset + length) };
+  },
+};
+
+await new Ballerina({ fs }).run("main.bal");
 ```
+
+- File contents are always `Uint8Array`.
+- Methods may return a value or a promise.
+- Errors are thrown with a code: an `FsError`, or any error with a string `code`, such as Node.js errors. Other errors become `EIO`.
+- `stat`, `readdir` and `open` are required. `mkdir`, `rm` and `rename` are optional, and programs get `EROFS` when they are missing.
+- Paths are relative to the filesystem root (`.`). Set `supportsAbsolutePaths` to accept absolute paths too; without it, a program's absolute paths start from the root.
+
+Symbolic links cannot be created or resolved yet, and `file:Listener` and the `COPY_ATTRIBUTES` copy option are not supported.
 
 To use the Node adapter explicitly:
 
