@@ -10,7 +10,6 @@ Workspaces are declared in the root `package.json` as `apps/*`, `examples/*`, an
 | ------------------------- | ------------------ | ---------------------------------------- |
 | `packages/balrun`         | `@snelusha/balrun` | TypeScript library, React hook, and CLI. |
 | `packages/ballerina-wasm` | `ballerina-wasm`   | Builds `ballerina.wasm` with Go.         |
-| `examples/memfs`          | `example-memfs`    | In-memory filesystem usage example.      |
 | `examples/vite`           | `example-vite`     | Vite + React browser usage example.      |
 
 ## Commands

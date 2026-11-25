@@ -13,18 +13,6 @@
         "turbo": "^2.11.2",
       },
     },
-    "examples/memfs": {
-      "name": "example-memfs",
-      "dependencies": {
-        "@snelusha/balrun": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/bun": "catalog:",
-      },
-      "peerDependencies": {
-        "typescript": "catalog:",
-      },
-    },
     "examples/vite": {
       "name": "example-vite",
       "version": "0.0.0",
@@ -55,7 +43,7 @@
     },
     "packages/balrun": {
       "name": "@snelusha/balrun",
-      "version": "0.6.1",
+      "version": "0.6.3",
       "bin": {
         "balrun": "./bin/cli.mjs",
       },
@@ -394,8 +382,6 @@
     "enhanced-resolve": ["enhanced-resolve@5.24.5", "", { "dependencies": { "graceful-fs": "^4.2.4", "tapable": "^2.3.3" } }, "sha512-L1l8TNvomm6UVW5B253AGxQagSQr+vGwhMlrrfRS2qmhx46AMpMVJKQYLvWYbysTMY8VoicOvzHzoHMbyzB+4A=="],
 
     "entities": ["entities@7.0.1", "", {}, "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA=="],
-
-    "example-memfs": ["example-memfs@workspace:examples/memfs"],
 
     "example-vite": ["example-vite@workspace:examples/vite"],
 
