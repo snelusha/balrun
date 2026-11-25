@@ -34,8 +34,9 @@ var (
 type bridgeFS struct {
 	proxy js.Value
 
-	mu   sync.Mutex
-	open map[*bridgeFile]struct{}
+	mu     sync.Mutex
+	open   map[*bridgeFile]struct{}
+	closed bool
 }
 
 func newBridgeFS(proxy js.Value) *bridgeFS {
@@ -184,9 +185,10 @@ func (b *bridgeFS) openFile(name string, flag int) (*bridgeFile, error) {
 		_ = file.closeHandle()
 		return nil, pathError("open", name, syscall.EACCES)
 	}
-	b.mu.Lock()
-	b.open[file] = struct{}{}
-	b.mu.Unlock()
+	if !b.track(file) {
+		_ = file.closeHandle()
+		return nil, pathError("open", name, fs.ErrClosed)
+	}
 	return file, nil
 }
 
@@ -275,8 +277,20 @@ func (b *bridgeFS) Move(oldpath, newpath string) error {
 	return err
 }
 
+// track reports false if the run ended while the file was being opened.
+func (b *bridgeFS) track(file *bridgeFile) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return false
+	}
+	b.open[file] = struct{}{}
+	return true
+}
+
 func (b *bridgeFS) closeAll() {
 	b.mu.Lock()
+	b.closed = true
 	files := b.open
 	b.open = make(map[*bridgeFile]struct{})
 	b.mu.Unlock()
@@ -333,9 +347,10 @@ func (f *bridgeFile) Write(p []byte) (int, error) {
 		return 0, pathError("write", f.name, syscall.EBADF)
 	}
 
+	data := bytesToJS(p)
 	written := 0
 	for written < len(p) {
-		res, err := callMethod(f.handle, "write", f.offset, bytesToJS(p[written:]))
+		res, err := callMethod(f.handle, "write", f.offset, data.Call("subarray", written))
 		if err != nil {
 			return written, pathError("write", f.name, err)
 		}

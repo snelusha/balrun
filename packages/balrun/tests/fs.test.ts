@@ -137,6 +137,16 @@ describe.each(["NodeFS", "MemFS"])("%s", (name) => {
 		expect(await codeOf(() => fs.stat(at("dir")))).toBe("ENOENT");
 	});
 
+	it("refuses to move a directory into itself", async () => {
+		await fs.mkdir(at("a/b"), { recursive: true });
+		expect(await codeOf(() => fs.rename(at("a"), at("a/b/moved")))).toBe("EINVAL");
+		if (root === ".") {
+			expect(await codeOf(() => fs.rename("a", "./a/b/moved"))).toBe("EINVAL");
+		}
+		await fs.rename(at("a"), at("ab"));
+		expect((await fs.stat(at("ab/b"))).type).toBe("dir");
+	});
+
 	it("throws errors with codes", async () => {
 		await fs.mkdir(at("dir"), { recursive: false });
 		await write(fs, at("file"), "");

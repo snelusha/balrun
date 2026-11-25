@@ -285,6 +285,8 @@ func (f *palFS) copy(src, dst string, opts pal.CopyOptions) error {
 		}
 	}
 	if info.IsDir() {
+		// FIXME: Fs cannot resolve symbolic links, so a target inside the source
+		// through a link is not detected.
 		if from == "." || from == "/" || from == to || strings.HasPrefix(to, from+"/") {
 			return pathError("copy", to, syscall.EINVAL)
 		}
@@ -387,14 +389,18 @@ func (f *palFS) createTempEntry(prefix, suffix, dir string, create func(resolved
 	}
 	for range maxTempAttempts {
 		name := path.Join(dir, fmt.Sprintf("%s%d%s", prefix, rand.Uint32(), suffix))
-		err := create(f.resolve(name))
+		abs, err := f.abs(name)
+		if err != nil {
+			return "", err
+		}
+		err = create(f.resolve(name))
 		if errors.Is(err, fs.ErrExist) {
 			continue
 		}
 		if err != nil {
 			return "", err
 		}
-		return f.abs(name)
+		return abs, nil
 	}
 	return "", pathError("createtemp", dir, syscall.EEXIST)
 }

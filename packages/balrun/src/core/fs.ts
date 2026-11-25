@@ -38,6 +38,7 @@ export interface FsFile {
 	 * for writing (`EACCES`).
 	 */
 	write?(offset: number, data: Uint8Array): MaybePromise<number>;
+	/** Without it, the path the file was opened with is used. */
 	stat?(): MaybePromise<FsStat>;
 	close?(): MaybePromise<void>;
 }

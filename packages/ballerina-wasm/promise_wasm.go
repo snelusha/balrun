@@ -80,7 +80,10 @@ func awaitPromise(promise js.Value) (js.Value, error) {
 		return nil
 	})
 
-	promise.Call("then", thenFunc, catchFunc)
+	if _, err := tryCall(promise, "then", thenFunc, catchFunc); err != nil {
+		release()
+		return js.Undefined(), err
+	}
 
 	r := <-ch
 	return r.value, r.err

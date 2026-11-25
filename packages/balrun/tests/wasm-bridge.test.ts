@@ -220,6 +220,83 @@ describe("WasmBridge", () => {
 			expect(open).toBe(0);
 		});
 
+		it("closes files whose open finishes after the run ends", async () => {
+			const opening = Promise.withResolvers<void>();
+			const finishOpen = Promise.withResolvers<void>();
+			const closed = Promise.withResolvers<void>();
+			const { fs } = await fixture("late-open.bal", (files): Fs => {
+				const fs = new MemFS({ ...files, "late.bin": "" });
+				return {
+					stat: (path) => fs.stat(path),
+					readdir: (path) => fs.readdir(path),
+					open: async (path, flags) => {
+						const file = fs.open(path, flags);
+						if (path !== "late.bin") return file;
+						opening.resolve();
+						await finishOpen.promise;
+						return {
+							read: () => {
+								throw new FsError("EIO");
+							},
+							close: () => closed.resolve(),
+						};
+					},
+				};
+			});
+
+			const listening = Promise.withResolvers<void>();
+			const result = bridge.run(fs, "main.bal", { onListenerReady: () => listening.resolve() });
+			await listening.promise;
+			const request = { host: "localhost", port: 6969, path: "/read" };
+			void bridge.dispatchHttpRequest(request).catch(() => {});
+			await opening.promise;
+			expect(bridge.stop("immediate")).toBe(true);
+			await result;
+			await Bun.sleep(0);
+			finishOpen.resolve();
+			await closed.promise;
+		});
+
+		it("continues short writes", async () => {
+			const { stdout, run } = await fixture("binary-io.bal", (files): Fs => {
+				const fs = new MemFS(files);
+				return {
+					stat: (path) => fs.stat(path),
+					readdir: (path) => fs.readdir(path),
+					open: (path, flags) => {
+						const file = fs.open(path, flags);
+						return {
+							read: file.read.bind(file),
+							write: file.write && ((offset, data) => file.write!(offset, data.subarray(0, 1))),
+						};
+					},
+				};
+			});
+
+			expect(await run()).toBe(0);
+			expect(stdout.join("")).toBe("[255,254,0,128]\n");
+		});
+
+		it("reports thenables that throw", async () => {
+			class ThrowingFS extends MemFS {
+				override open(path: string, flags: FsOpenFlags): FsFile {
+					if (path !== "denied.txt") return super.open(path, flags);
+					return {
+						// oxlint-disable-next-line unicorn/no-thenable
+						then() {
+							throw new FsError("EACCES");
+						},
+					} as unknown as FsFile;
+				}
+			}
+			const { stdout, run } = await fixture("fs-errors.bal", (files) => new ThrowingFS(files));
+
+			expect(await run()).toBe(0);
+			expect(lines(stdout)).toContain(
+				"error while reading file 'denied.txt': open denied.txt: Permission denied",
+			);
+		});
+
 		it("preserves error codes", async () => {
 			class FailingFS extends MemFS {
 				override open(path: string, flags: FsOpenFlags): FsFile {

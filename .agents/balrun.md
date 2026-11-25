@@ -23,4 +23,4 @@ README.md documents the public API. This file covers the rules and the parts tha
 
 ## Tests
 
-- The HTTP listener test binds port 6969 (`tests/fixtures/http-listener.bal`).
+- The HTTP listener tests bind port 6969 (`tests/fixtures/http-listener.bal`, `tests/fixtures/late-open.bal`).

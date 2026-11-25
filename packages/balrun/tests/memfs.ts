@@ -74,7 +74,10 @@ export class MemFS implements Fs {
 		const node = this.get(from);
 		const [oldParent, oldName] = this.parentOf(from);
 		const [newParent, newName] = this.parentOf(to);
-		if (to.startsWith(`${from}/`)) throw new FsError("EINVAL", to);
+		const fromNames = segments(from);
+		const toNames = segments(to);
+		if (toNames.length > fromNames.length && fromNames.every((name, i) => name === toNames[i]))
+			throw new FsError("EINVAL", to);
 		const target = newParent.children.get(newName);
 		if (target?.type === "dir" && node.type === "file") throw new FsError("EISDIR", to);
 		if (target?.type === "file" && node.type === "dir") throw new FsError("ENOTDIR", to);
