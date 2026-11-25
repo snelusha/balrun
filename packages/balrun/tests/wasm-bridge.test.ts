@@ -5,21 +5,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { FsError, NodeFS, WasmBridge } from "../src/node";
-import { MemFS } from "./memfs";
+import { MemFS } from "../src/core/memfs";
 
 import type { WasmExports } from "../src/core/bridge";
 import type { Fs, FsFile, FsOpenFlags } from "../src/node";
 
 const WASM_PATH = new URL("../dist/ballerina.wasm", import.meta.url).href;
-
-const READ: FsOpenFlags = {
-	read: true,
-	write: false,
-	create: false,
-	truncate: false,
-	append: false,
-	exclusive: false,
-};
 
 const FILE_OPS_OUTPUT = [
 	"true",
@@ -191,9 +182,7 @@ describe("WasmBridge", () => {
 
 			expect(await run()).toBe(0);
 			expect(stdout.join("")).toBe("[255,254,0,128]\n");
-			expect(Array.from(await fs.open("b.bin", READ).read(0, 16))).toEqual([
-				0xff, 0xfe, 0x00, 0x80,
-			]);
+			expect(Array.from(fs.readFile("b.bin"))).toEqual([0xff, 0xfe, 0x00, 0x80]);
 		});
 
 		it("streams files and closes the ones left open", async () => {
@@ -279,32 +268,36 @@ describe("WasmBridge", () => {
 
 		it("reports thenables that throw", async () => {
 			class ThrowingFS extends MemFS {
-				override open(path: string, flags: FsOpenFlags): FsFile {
-					if (path !== "denied.txt") return super.open(path, flags);
+				override readFile(path: string): Uint8Array {
+					if (path !== "denied.txt") return super.readFile(path);
 					return {
 						// oxlint-disable-next-line unicorn/no-thenable
 						then() {
 							throw new FsError("EACCES");
 						},
-					} as unknown as FsFile;
+					} as unknown as Uint8Array;
 				}
 			}
 			const { stdout, run } = await fixture("fs-errors.bal", (files) => new ThrowingFS(files));
 
 			expect(await run()).toBe(0);
 			expect(lines(stdout)).toContain(
-				"error while reading file 'denied.txt': open denied.txt: Permission denied",
+				"error while reading file 'denied.txt': read denied.txt: Permission denied",
 			);
 		});
 
 		it("preserves error codes", async () => {
 			class FailingFS extends MemFS {
-				override open(path: string, flags: FsOpenFlags): FsFile {
+				override readFile(path: string): Uint8Array {
 					if (path === "denied.txt") throw new FsError("EACCES");
 					if (path === "broken.txt") throw new Error("disk on fire");
 					if (path === "thrown.txt") throw undefined;
+					return super.readFile(path);
+				}
+
+				override writeFile(path: string, data: Uint8Array | string): void {
 					if (path === "dir/new.txt") throw new FsError("ENOSPC");
-					return super.open(path, flags);
+					super.writeFile(path, data);
 				}
 			}
 			const { stdout, run } = await fixture("fs-errors.bal", (files) => {
@@ -315,11 +308,11 @@ describe("WasmBridge", () => {
 
 			expect(await run()).toBe(0);
 			expect(lines(stdout)).toEqual([
-				"error while reading file 'missing.txt': open missing.txt: No such file or directory",
-				"error while reading file 'dir': open dir: Is a directory",
-				"error while reading file 'denied.txt': open denied.txt: Permission denied",
-				"error while reading file 'broken.txt': open broken.txt: disk on fire",
-				"error while reading file 'thrown.txt': open thrown.txt: I/O error",
+				"error while reading file 'missing.txt': read missing.txt: No such file or directory",
+				"error while reading file 'dir': read dir: Is a directory",
+				"error while reading file 'denied.txt': read denied.txt: Permission denied",
+				"error while reading file 'broken.txt': read broken.txt: disk on fire",
+				"error while reading file 'thrown.txt': read thrown.txt: I/O error",
 				"error while writing to file 'dir/new.txt': write dir/new.txt: No space left on device",
 			]);
 		});

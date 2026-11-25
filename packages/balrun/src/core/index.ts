@@ -1,5 +1,6 @@
 export { BALRUN_VERSION } from "./version";
 export { FsError } from "./fs";
+export { MemFS } from "./memfs";
 
 export type { Fs, FsDirEntry, FsFile, FsFileType, FsOpenFlags, FsStat, MaybePromise } from "./fs";
 export type { HTTPDispatchRequest, HTTPListenerReady, HTTPListenerResponse } from "./http-listener";
