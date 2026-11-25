@@ -8,13 +8,13 @@ import type {
 	BalrunVersion,
 	BallerinaStopMode,
 } from "./ballerina-core";
-import type { FS } from "./fs";
+import type { Fs } from "./fs";
 import type { HTTPDispatchRequest, HTTPListenerResponse } from "./http-listener";
 import type { Platform } from "./platform";
 
 export interface BallerinaOptions extends BallerinaRunOptions {
 	/** Filesystem exposed to the Ballerina runtime. Defaults to the Node adapter in Node.js. Required in browsers. */
-	fs?: FS;
+	fs?: Fs;
 	/**
 	 * A pre-constructed Ballerina core. When provided, `wasmSource` is ignored and
 	 * this core is used directly instead of loading the bundled WASM binary.
@@ -31,7 +31,7 @@ export class Ballerina {
 	private _bridge: BallerinaCore | null = null;
 	private _bridgePromise: Promise<BallerinaCore> | null = null;
 
-	private _fs: FS | undefined;
+	private _fs: Fs | undefined;
 	private _defaults: BallerinaOptions;
 
 	constructor(platform: Platform, options: BallerinaOptions = {}) {
@@ -76,7 +76,7 @@ export class Ballerina {
 		return this._bridgePromise;
 	}
 
-	private async fs(): Promise<FS> {
+	private async fs(): Promise<Fs> {
 		if (this._fs) return this._fs;
 
 		const fs = this._platform.defaultFS?.();

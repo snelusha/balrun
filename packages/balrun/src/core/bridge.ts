@@ -7,7 +7,7 @@ import type {
 	BallerinaRunResult,
 	BallerinaStopMode,
 } from "./ballerina-core";
-import type { FS } from "./fs";
+import type { Fs } from "./fs";
 import type {
 	HTTPDispatchRequest,
 	HTTPListenerReady,
@@ -31,7 +31,7 @@ interface WasmRunOptions extends BallerinaRunOptions {
 
 export interface WasmExports {
 	version: () => BallerinaInterpreterVersion;
-	run(proxy: FS, path: string, options?: WasmRunOptions): Promise<BallerinaRunResult>;
+	run(proxy: Fs, path: string, options?: WasmRunOptions): Promise<BallerinaRunResult>;
 	stop: (mode: BallerinaStopMode) => boolean;
 	dispatchHttpRequest: (
 		host: string,
@@ -79,7 +79,7 @@ export class WasmBridge implements BallerinaCore {
 		return this.exports.version();
 	}
 
-	async run(proxy: FS, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
+	async run(proxy: Fs, path: string, options?: BallerinaRunOptions): Promise<BallerinaRunResult> {
 		if (path === "") return Promise.reject(new Error("[balrun]: run path must not be empty."));
 		if (path.startsWith("/") && !proxy.supportsAbsolutePaths)
 			return Promise.reject(new Error("[balrun]: filesystem does not support absolute run paths."));
