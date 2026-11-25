@@ -8,20 +8,20 @@ import type {
 	BallerinaOptions,
 	BallerinaRunOptions,
 	BallerinaStopMode,
-	FS,
+	Fs,
 	HTTPDispatchRequest,
 	HTTPListenerResponse,
 } from "../src/node";
 
 class SpyCore implements BallerinaCore {
-	calls: Array<{ fs: FS; path: string; options?: BallerinaRunOptions }> = [];
+	calls: Array<{ fs: Fs; path: string; options?: BallerinaRunOptions }> = [];
 	signals: string[] = [];
 
 	async version() {
 		return { version: "dev", revision: "unknown" };
 	}
 
-	async run(fs: FS, path: string, options?: BallerinaRunOptions) {
+	async run(fs: Fs, path: string, options?: BallerinaRunOptions) {
 		this.calls.push({ fs, path, options });
 		return 0;
 	}
