@@ -12,19 +12,15 @@ import (
 var processStart = time.Now()
 
 func newPal(cwd string, fsys *bridgeFS, stdout, stderr io.Writer, signals pal.SignalSource, httpListenerTransport, osProxy js.Value) pal.Platform {
-	palFS := &palFS{cwd: cwd, fsys: fsys}
+	palOS := newPalOS(osProxy)
 
 	return pal.Platform{
 		IO: pal.IO{
 			Stdout: stdout.Write,
 			Stderr: stderr.Write,
 		},
-		FS: pal.FS{
-			ReadFile:   palFS.readFile,
-			WriteFile:  palFS.writeFile,
-			AppendFile: palFS.appendFile,
-		},
-		OS: newPalOS(osProxy),
+		FS: newPalFS(cwd, fsys, palOS.GetEnv),
+		OS: palOS,
 		HTTP: pal.HTTP{
 			NewClient: func(cfg pal.ClientConfig) (pal.HTTPClient, error) {
 				return &fetchHTTPClient{cfg: cfg}, nil
