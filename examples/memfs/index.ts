@@ -1,52 +1,39 @@
-import { Ballerina } from "@snelusha/balrun";
+import { Ballerina, FsError } from "@snelusha/balrun";
 
-import type { DirEntry, FS, OpenResult, StatResult } from "@snelusha/balrun";
+import type { Fs, FsDirEntry, FsFile, FsOpenFlags, FsStat } from "@snelusha/balrun";
 
-// When running a single file, only `open` and `stat` are required.
-// When running a package, `readDir` is also required.
-class MemFS implements FS {
-	private files = new Map<string, string>();
+// A read-only filesystem needs only `stat`, `readdir` and `open`. Add `mkdir`, `rm` and
+// `rename`, and a `write` method on files, to let programs change it.
+class MemFS implements Fs {
+	private files = new Map<string, Uint8Array>();
 
 	constructor(files: Record<string, string>) {
 		for (const [path, content] of Object.entries(files)) {
-			this.files.set(path, content);
+			this.files.set(path, new TextEncoder().encode(content));
 		}
 	}
 
-	async open(path: string): Promise<OpenResult | null> {
+	stat(path: string): FsStat {
+		if (path === ".") return { type: "dir", size: 0, mtimeMs: 0 };
+		return { type: "file", size: this.read(path).length, mtimeMs: 0 };
+	}
+
+	readdir(path: string): FsDirEntry[] {
+		if (path !== ".") throw new FsError("ENOENT", path);
+		return Array.from(this.files.keys(), (name) => ({ name, type: "file" }));
+	}
+
+	open(path: string, flags: FsOpenFlags): FsFile {
+		if (flags.write) throw new FsError("EROFS", path);
+		if (path === ".") throw new FsError("EISDIR", path);
+		const content = this.read(path);
+		return { read: (offset, length) => content.subarray(offset, offset + length) };
+	}
+
+	private read(path: string): Uint8Array {
 		const content = this.files.get(path);
-		return content == null ? null : { content, size: content.length, modTime: 0, isDir: false };
-	}
-
-	async stat(path: string): Promise<StatResult | null> {
-		if (path === ".") {
-			return { name: ".", size: 0, modTime: 0, isDir: true };
-		}
-		const content = this.files.get(path);
-		return content == null ? null : { name: path, size: content.length, modTime: 0, isDir: false };
-	}
-
-	async readDir(path: string): Promise<DirEntry[] | null> {
-		if (path === ".") {
-			return Array.from(this.files.keys()).map((name) => ({
-				name,
-				isDir: false,
-			}));
-		}
-		return null;
-	}
-
-	async writeFile(): Promise<boolean> {
-		throw new Error("not implemented");
-	}
-	async remove(): Promise<boolean> {
-		throw new Error("not implemented");
-	}
-	async move(): Promise<boolean> {
-		throw new Error("not implemented");
-	}
-	async mkdirAll(): Promise<boolean> {
-		throw new Error("not implemented");
+		if (!content) throw new FsError("ENOENT", path);
+		return content;
 	}
 }
 
