@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { Ballerina, WasmBridge } from "../src/web";
-import { MemFS } from "./memfs";
+import { MemFS } from "../src/core/memfs";
 
 const WASM_URL = new URL("../dist/ballerina.wasm", import.meta.url).href;
 

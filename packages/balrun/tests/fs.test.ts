@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { FsError, NodeFS } from "../src/node";
-import { MemFS } from "./memfs";
+import { MemFS } from "../src/core/memfs";
 
 import type { Fs, FsFile, FsOpenFlags } from "../src/node";
 
@@ -162,6 +162,47 @@ describe.each(["NodeFS", "MemFS"])("%s", (name) => {
 		expect(await codeOf(() => fs.mkdir(at("file/child"), { recursive: true }))).toBe("ENOTDIR");
 		expect(await codeOf(() => fs.rm(at("missing"), { recursive: true }))).toBe("ENOENT");
 		expect(await codeOf(() => fs.rename(at("missing"), at("other")))).toBe("ENOENT");
+	});
+});
+
+describe("MemFS", () => {
+	it("is constructed from a plain object", () => {
+		const source = Buffer.from("bytes");
+		const fs = new MemFS({ "main.bal": "text", "./a/b/c.bin": source });
+		source.fill(0);
+		expect(decode(fs.readFile("main.bal"))).toBe("text");
+		expect(decode(fs.readFile("a/b/c.bin"))).toBe("bytes");
+		expect(new MemFS().readdir(".")).toEqual([]);
+	});
+
+	it("reads and writes whole files", async () => {
+		const fs = new MemFS({ "a.txt": "a longer content" });
+		fs.writeFile("a.txt", "short");
+		const copy = fs.readFile("a.txt");
+		expect(decode(copy)).toBe("short");
+		copy.fill(0);
+		expect(decode(fs.readFile("a.txt"))).toBe("short");
+		expect(await codeOf(() => fs.writeFile("missing/a.txt", ""))).toBe("ENOENT");
+		expect(await codeOf(() => fs.readFile("."))).toBe("EISDIR");
+	});
+
+	it("keeps contents exact while files grow", () => {
+		const fs = new MemFS();
+		const file = fs.open("a.txt", { ...WRITE, append: true });
+		for (let i = 0; i < 100; i++) file.write?.(0, encode("abc"));
+		expect(fs.stat("a.txt").size).toBe(300);
+		expect(decode(fs.readFile("a.txt"))).toBe("abc".repeat(100));
+		expect(file.read(299, 10)).toHaveLength(1);
+		expect(file.read(300, 10)).toHaveLength(0);
+
+		fs.open("gap", WRITE).write?.(3, encode("x"));
+		expect(Array.from(fs.readFile("gap"))).toEqual([0, 0, 0, 120]);
+	});
+
+	it("resolves dot segments", async () => {
+		const fs = new MemFS({ "a/b/c.txt": "c" });
+		expect(decode(fs.readFile("/a/./x/../b/c.txt"))).toBe("c");
+		expect(await codeOf(() => fs.mkdir(".", { recursive: false }))).toBe("EEXIST");
 	});
 });
 

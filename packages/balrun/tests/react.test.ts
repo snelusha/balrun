@@ -7,7 +7,7 @@ import { Window } from "happy-dom";
 
 import { Ballerina, WasmBridge } from "../src/node";
 import { BallerinaProvider, useBallerina } from "../src/react";
-import { MemFS } from "./memfs";
+import { MemFS } from "../src/core/memfs";
 
 import type { BallerinaCore } from "../src/core/ballerina-core";
 import type { BallerinaProviderProps } from "../src/react";

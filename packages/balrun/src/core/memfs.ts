@@ -1,22 +1,27 @@
-import { FsError } from "../src/core/fs";
+import { FsError } from "./fs";
 
-import type { Fs, FsDirEntry, FsFile, FsOpenFlags, FsStat } from "../src/core/fs";
+import type { Fs, FsDirEntry, FsFile, FsOpenFlags, FsStat } from "./fs";
 
-type FileNode = { type: "file"; data: Uint8Array; mtimeMs: number };
+type FileNode = { type: "file"; data: Uint8Array; size: number; mtimeMs: number };
 type DirNode = { type: "dir"; children: Map<string, Node>; mtimeMs: number };
 type Node = FileNode | DirNode;
+
+const WRITE_FILE: FsOpenFlags = {
+	read: false,
+	write: true,
+	create: true,
+	truncate: true,
+	append: false,
+	exclusive: false,
+};
 
 export class MemFS implements Fs {
 	private readonly root: DirNode = createDir();
 
-	constructor(files: Record<string, string | Uint8Array>) {
+	constructor(files: Record<string, string | Uint8Array> = {}) {
 		for (const [path, content] of Object.entries(files)) {
-			const parent = path.split("/").slice(0, -1).join("/");
-			if (parent !== "") this.mkdir(parent, { recursive: true });
-			this.writeFile(
-				path,
-				typeof content === "string" ? new TextEncoder().encode(content) : content,
-			);
+			this.mkdir(segments(path).slice(0, -1).join("/"), { recursive: true });
+			this.writeFile(path, content);
 		}
 	}
 
@@ -30,23 +35,13 @@ export class MemFS implements Fs {
 	}
 
 	open(path: string, flags: FsOpenFlags): FsFile {
-		let node = this.find(path);
-		if (node && flags.create && flags.exclusive) throw new FsError("EEXIST", path);
-		if (!node) {
-			if (!flags.create) throw new FsError("ENOENT", path);
-			const [parent, name] = this.parentOf(path);
-			node = createFile();
-			parent.children.set(name, node);
-		}
-		if (node.type === "dir") throw new FsError("EISDIR", path);
-		if (flags.truncate) node.data = new Uint8Array();
-		return new MemFile(node, flags);
+		return new MemFile(this.openNode(path, flags), flags);
 	}
 
 	mkdir(path: string, options: { recursive: boolean }): void {
 		if (!options.recursive) {
+			if (this.find(path)) throw new FsError("EEXIST", path);
 			const [parent, name] = this.parentOf(path);
-			if (parent.children.has(name)) throw new FsError("EEXIST", path);
 			parent.children.set(name, createDir());
 			return;
 		}
@@ -87,15 +82,38 @@ export class MemFS implements Fs {
 		newParent.children.set(newName, node);
 	}
 
-	writeFile(path: string, data: Uint8Array): void {
-		this.open(path, {
-			read: false,
-			write: true,
-			create: true,
-			truncate: true,
-			append: false,
-			exclusive: false,
-		}).write?.(0, data);
+	readFile(path: string): Uint8Array {
+		const node = this.get(path);
+		if (node.type === "dir") throw new FsError("EISDIR", path);
+		return node.data.slice(0, node.size);
+	}
+
+	writeFile(path: string, data: Uint8Array | string): void {
+		const node = this.openNode(path, WRITE_FILE);
+		const content =
+			typeof data === "string" ? new TextEncoder().encode(data) : new Uint8Array(data);
+		node.data = content;
+		node.size = content.length;
+		node.mtimeMs = Date.now();
+	}
+
+	private openNode(path: string, flags: FsOpenFlags): FileNode {
+		const node = this.find(path);
+		if (!node) {
+			if (!flags.create) throw new FsError("ENOENT", path);
+			const [parent, name] = this.parentOf(path);
+			const file = createFile();
+			parent.children.set(name, file);
+			return file;
+		}
+		if (flags.create && flags.exclusive) throw new FsError("EEXIST", path);
+		if (node.type === "dir") throw new FsError("EISDIR", path);
+		if (flags.truncate) {
+			node.data = new Uint8Array();
+			node.size = 0;
+			node.mtimeMs = Date.now();
+		}
+		return node;
 	}
 
 	private find(path: string): Node | undefined {
@@ -141,7 +159,7 @@ class MemFile implements FsFile {
 	}
 
 	read(offset: number, length: number): Uint8Array {
-		return this.node.data.slice(offset, offset + length);
+		return this.node.data.slice(offset, Math.min(offset + length, this.node.size));
 	}
 
 	stat(): FsStat {
@@ -150,22 +168,32 @@ class MemFile implements FsFile {
 
 	private writeAt(offset: number, data: Uint8Array): number {
 		const { node } = this;
-		const start = this.append ? node.data.length : offset;
-		const next = new Uint8Array(Math.max(node.data.length, start + data.length));
-		next.set(node.data);
-		next.set(data, start);
-		node.data = next;
+		if (data.length === 0) return 0;
+		const start = this.append ? node.size : offset;
+		const end = start + data.length;
+		if (end > node.data.length) {
+			const grown = new Uint8Array(Math.max(end, node.data.length * 2));
+			grown.set(node.data);
+			node.data = grown;
+		}
+		node.data.set(data, start);
+		node.size = Math.max(node.size, end);
 		node.mtimeMs = Date.now();
 		return data.length;
 	}
 }
 
 function segments(path: string): string[] {
-	return path.split("/").filter((name) => name !== "" && name !== ".");
+	const names: string[] = [];
+	for (const name of path.split("/")) {
+		if (name === "..") names.pop();
+		else if (name !== "" && name !== ".") names.push(name);
+	}
+	return names;
 }
 
 function createFile(): FileNode {
-	return { type: "file", data: new Uint8Array(), mtimeMs: Date.now() };
+	return { type: "file", data: new Uint8Array(), size: 0, mtimeMs: Date.now() };
 }
 
 function createDir(): DirNode {
@@ -175,7 +203,7 @@ function createDir(): DirNode {
 function toStat(node: Node): FsStat {
 	return {
 		type: node.type,
-		size: node.type === "file" ? node.data.length : 0,
+		size: node.type === "file" ? node.size : 0,
 		mtimeMs: node.mtimeMs,
 	};
 }

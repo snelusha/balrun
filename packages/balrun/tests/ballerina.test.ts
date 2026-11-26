@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { BALRUN_VERSION, Ballerina } from "../src/node";
-import { MemFS } from "./memfs";
+import { MemFS } from "../src/core/memfs";
 
 import type {
 	BallerinaCore,

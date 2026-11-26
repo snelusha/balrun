@@ -1,10 +1,7 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
-import { Ballerina, FsError } from "@snelusha/balrun";
+import { Ballerina, MemFS } from "@snelusha/balrun";
 import { BallerinaProvider, useBallerina } from "@snelusha/balrun/react";
-
-import type { Fs } from "@snelusha/balrun";
-import type { RefObject } from "react";
 
 const DEFAULT_CODE = `import ballerina/io;
 
@@ -12,38 +9,19 @@ public function main() {
     io:println("Hello from Ballerina!");
 }`;
 
-function createFs(code: RefObject<string>): Fs {
-	const read = (path: string) => {
-		if (path !== "main.bal") throw new FsError("ENOENT", path);
-		return new TextEncoder().encode(code.current);
-	};
-
-	return {
-		stat: (path) => ({ type: "file", size: read(path).length, mtimeMs: 0 }),
-		readdir: (path) => {
-			throw new FsError("ENOENT", path);
-		},
-		open: (path, flags) => {
-			if (flags.write) throw new FsError("EROFS", path);
-			const content = read(path);
-			return { read: (offset, length) => content.subarray(offset, offset + length) };
-		},
-	};
-}
-
 export default function App() {
 	const [code, setCode] = useState(DEFAULT_CODE);
 	const [output, setOutput] = useState("no output");
 
-	const codeRef = useRef(DEFAULT_CODE);
+	const [fs] = useState(() => new MemFS({ "main.bal": DEFAULT_CODE }));
 
 	const [ballerina] = useState(() => {
 		const writer = { write: (chunk: string) => setOutput((prev) => prev + chunk) };
-		return new Ballerina({ fs: createFs(codeRef), stdout: writer, stderr: writer, colors: false });
+		return new Ballerina({ fs, stdout: writer, stderr: writer, colors: false });
 	});
 
 	const updateCode = (value: string) => {
-		codeRef.current = value;
+		fs.writeFile("main.bal", value);
 		setCode(value);
 	};
 

@@ -63,10 +63,10 @@ The CLI forwards `SIGINT` and `SIGTERM` as graceful stops, and `SIGQUIT` as an i
 ## React
 
 ```tsx
-import { Ballerina } from "@snelusha/balrun";
+import { Ballerina, MemFS } from "@snelusha/balrun";
 import { BallerinaProvider, useBallerina } from "@snelusha/balrun/react";
 
-const ballerina = new Ballerina({ fs: new SomeFS() });
+const ballerina = new Ballerina({ fs: new MemFS({ "main.bal": "public function main() {}" }) });
 
 function App() {
   return (
@@ -80,7 +80,7 @@ function RunButton() {
   const { isReady, error, run } = useBallerina();
 
   return (
-    <button disabled={!isReady} onClick={() => run("./main.bal")}>
+    <button disabled={!isReady} onClick={() => run("main.bal")}>
       {error ? error.message : "Run Ballerina"}
     </button>
   );
@@ -126,7 +126,17 @@ await new Ballerina({ stdout: writer, stderr: writer }).run("./main.bal");
 
 ### `fs`
 
-`Ballerina` accesses files through the `Fs` interface. In Node.js environments, this defaults to the built-in Node adapter. In browsers, pass an `fs` implementation explicitly.
+`Ballerina` accesses files through the `Fs` interface. In Node.js environments, this defaults to the built-in Node adapter. In browsers, pass an `fs` explicitly, such as `MemFS`:
+
+```ts
+import { Ballerina, MemFS } from "@snelusha/balrun";
+
+const fs = new MemFS({ "main.bal": "public function main() {}" });
+
+await new Ballerina({ fs }).run("main.bal");
+```
+
+Or implement `Fs`:
 
 ```ts
 import { Ballerina, FsError, type Fs } from "@snelusha/balrun";
@@ -166,8 +176,6 @@ import { Ballerina, NodeFS } from "@snelusha/balrun/node";
 
 await new Ballerina({ fs: new NodeFS() }).run("./main.bal");
 ```
-
-See [`examples/memfs`](https://github.com/snelusha/balrun/tree/main/examples/memfs) for a full implementation.
 
 ### `env`
 
