@@ -110,6 +110,79 @@ describe("WasmBridge", () => {
 		});
 	});
 
+	describe("exports", () => {
+		const names = ["run", "stop", "version", "dispatchHttpRequest"];
+		const handoffKey = "__balrun_exports__";
+
+		it("does not touch globals", async () => {
+			const originals = names.map(
+				(name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const,
+			);
+			const sentinel = () => {};
+			for (const name of names)
+				Object.defineProperty(globalThis, name, {
+					value: sentinel,
+					configurable: true,
+					writable: true,
+				});
+
+			try {
+				await (await WasmBridge.load(WASM_PATH)).version();
+				for (const name of names) expect(Reflect.get(globalThis, name)).toBe(sentinel);
+				expect(handoffKey in globalThis).toBe(false);
+			} finally {
+				for (const [name, descriptor] of originals) {
+					if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+					else Reflect.deleteProperty(globalThis, name);
+				}
+			}
+		});
+
+		it("keeps bridges independent", async () => {
+			const { fs } = await fixture("http-listener.bal");
+			const listening = Promise.withResolvers<void>();
+			const run = bridge.run(fs, "main.bal", { onListenerReady: () => listening.resolve() });
+			await listening.promise;
+
+			const other = await WasmBridge.load(WASM_PATH);
+			expect(other.stop("graceful")).toBe(false);
+			const response = await bridge.dispatchHttpRequest({
+				host: "localhost",
+				port: 6969,
+				path: "/ping",
+			});
+			expect(new TextDecoder().decode(response.body)).toBe("pong");
+			expect(bridge.stop("graceful")).toBe(true);
+			expect(await run).toBe(130);
+		});
+
+		it("supports concurrent loads", async () => {
+			const bridges = await Promise.all([WasmBridge.load(WASM_PATH), WasmBridge.load(WASM_PATH)]);
+			const source = await Bun.file(new URL("./fixtures/hello.bal", import.meta.url)).text();
+
+			const outputs = await Promise.all(
+				bridges.map(async (bridge) => {
+					const stdout: string[] = [];
+					const exitCode = await bridge.run(new MemFS({ "main.bal": source }), "main.bal", {
+						stdout: { write: (chunk) => stdout.push(chunk) },
+					});
+					return [exitCode, stdout.join("")];
+				}),
+			);
+			expect(outputs).toEqual([
+				[0, "Hello, Ballerina!\n"],
+				[0, "Hello, Ballerina!\n"],
+			]);
+		});
+
+		it("rejects and cleans up when the module fails to start", async () => {
+			const emptyModule = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+			const load = WasmBridge.load(new Response(emptyModule));
+			expect(await load.catch((error) => error)).toBeInstanceOf(Error);
+			expect(handoffKey in globalThis).toBe(false);
+		});
+	});
+
 	describe("version", () => {
 		it("reports the embedded interpreter version and revision", async () => {
 			expect(await bridge.version()).toMatchObject({
